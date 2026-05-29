@@ -160,7 +160,7 @@ Starts a new tmux session running `claude` in a project directory.
 tmux new-session -d -s <safe_name> -c ~/git/<project_name> \
   'claude --dangerously-skip-permissions [--continue] \
    --model claude-sonnet-4-6 --effort medium \
-   --remote-control MacMini-<originProjectName>'
+   --remote-control mymachine-<originProjectName>'
 ```
 
 - `originProjectName` is the last path segment of the `git remote get-url origin` URL with any trailing `.git` stripped (e.g. `https://github.com/RealDougEubanks/ClaudeMarketplace` → `ClaudeMarketplace`). If the project has no `origin` remote, the directory basename is used.
