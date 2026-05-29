@@ -1,0 +1,33 @@
+{
+  "name": "ccfleet",
+  "version": "0.1.0",
+  "description": "Self-hosted web dashboard for managing Claude Code CLI sessions across git projects.",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "pm2:logs": "pm2 logs ccfleet",
+    "pm2:restart": "pm2 restart ccfleet",
+    "pm2:start": "pm2 start ecosystem.config.js && pm2 save",
+    "pm2:status": "pm2 list",
+    "pm2:stop": "pm2 stop ccfleet",
+    "start": "node server.js",
+    "test": "node --test 'test/**/*.test.js'"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-basic-auth": "^1.2.1",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^8.2.0",
+    "pino": "^9.4.0",
+    "pino-http": "^10.3.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "pm2": "^6.0.14"
+  },
+  "license": "MIT"
+}

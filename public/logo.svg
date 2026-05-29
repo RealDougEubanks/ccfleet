@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 28 640 200" role="img" aria-labelledby="logo-title logo-desc">
+  <title id="logo-title">ccfleet Logo - TUI Dark</title>
+  <desc id="logo-desc">A TUI-styled logo for ccfleet, showing terminal process control and a small fleet graph.</desc>
+  <rect width="980" height="260" fill="#020617"/>
+
+  <g transform="translate(44 38)">
+    <rect x="0" y="0" width="184" height="184" rx="18" fill="#0F172A" stroke="#94A3B8" stroke-width="4"/>
+    <path d="M18 34 H166" stroke="#94A3B8" stroke-width="4"/>
+    <circle cx="34" cy="18" r="5" fill="#F87171"/>
+    <circle cx="52" cy="18" r="5" fill="#FBBF24"/>
+    <circle cx="70" cy="18" r="5" fill="#4ADE80"/>
+
+    <text x="28" y="72" font-family="JetBrains Mono, Fira Code, Consolas, monospace" font-size="25" font-weight="700" fill="#67E8F9">&gt; cc</text>
+    <path d="M30 96 H118" stroke="#475569" stroke-width="7" stroke-linecap="square"/>
+    <path d="M30 119 H95" stroke="#475569" stroke-width="7" stroke-linecap="square"/>
+
+    <circle cx="44" cy="154" r="9" fill="#E0F2FE"/>
+    <circle cx="92" cy="154" r="9" fill="#E0F2FE"/>
+    <circle cx="140" cy="154" r="9" fill="#E0F2FE"/>
+    <path d="M92 127 V144 M52 154 H82 M102 154 H130" fill="none" stroke="#E0F2FE" stroke-width="4" stroke-linecap="square"/>
+    <path d="M132 50 C146 59 154 72 155 88" fill="none" stroke="#67E8F9" stroke-width="5" stroke-linecap="square"/>
+    <path d="M121 62 C130 69 135 77 136 90" fill="none" stroke="#A78BFA" stroke-width="5" stroke-linecap="square"/>
+  </g>
+
+  <g transform="translate(268 75)">
+    <text x="0" y="74" font-family="JetBrains Mono, Fira Code, Consolas, monospace" font-size="76" font-weight="800" letter-spacing="-4" fill="#F8FAFC">cc<tspan fill="#67E8F9">fleet</tspan></text>
+
+<g transform="translate(512 34)">
+      <rect x="0" y="0" width="72" height="72" rx="8" fill="#0F172A" stroke="#94A3B8" stroke-width="3"/>
+      <path d="M30 23 L51 36 L30 49 Z" fill="#4ADE80"/>
+      <rect x="87" y="0" width="72" height="72" rx="8" fill="#0F172A" stroke="#94A3B8" stroke-width="3"/>
+      <rect x="111" y="24" width="24" height="24" rx="2" fill="#F87171"/>
+    </g>
+  </g>
+</svg>
