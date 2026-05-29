@@ -22,7 +22,7 @@ cp .env.example .env
 | `CLAUDE_MODEL` | no | `claude-sonnet-4-6` | Model name passed to `claude --model` | `lib/claude.js` |
 | `CLAUDE_EFFORT` | no | `medium` | Effort level passed to `claude --effort`. Must be `low`, `medium`, `high`, or `highest` | `lib/claude.js` |
 | `CLAUDE_SKIP_PERMISSIONS` | no | `false` | Set to `true` to pass `--dangerously-skip-permissions` to every claude session. **Disables all permission prompts — claude can read, write, and delete any file your account can access without asking.** Only enable if you fully understand and accept the risk. Never set on a shared machine. | `lib/claude.js` |
-| `REMOTE_CONTROL_PREFIX` | no | `MacMini` | Host prefix prepended to the per-session `--remote-control` identifier. Change this on each host if running ccfleet on multiple machines | `lib/claude.js` |
+| `REMOTE_CONTROL_PREFIX` | no | `os.hostname()` | Host prefix prepended to the per-session `--remote-control` identifier. Defaults to the machine hostname. Set this explicitly if the hostname is long, ambiguous, or changes (e.g. DHCP) | `lib/claude.js` |
 | `TTYD_URL` | no | empty | URL of the optional `ttyd` browser terminal. Attach button hidden when unset | `server.js` |
 | `REMOTE_CONTROL_URL` | no | `https://claude.ai/code` | URL the Open button deep-links to | `server.js` |
 | `LOG_LEVEL` | no | `info` | `pino` log level (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) | `lib/logger.js` |
