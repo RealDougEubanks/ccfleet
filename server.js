@@ -78,9 +78,12 @@ app.use(helmet({
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameSrc: ["'none'"],
+      // Transport encryption is handled externally (Cloudflare Tunnel / VPN).
+      // Disable upgrade-insecure-requests so the browser doesn't silently
+      // rewrite sub-resource requests to HTTPS on plain-HTTP deployments.
+      upgradeInsecureRequests: null,
     },
   },
-  // Transport encryption is handled externally (Cloudflare Tunnel / VPN).
   hsts: false,
 }));
 
