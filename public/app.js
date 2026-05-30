@@ -17,6 +17,7 @@ const el = {
   toast: document.getElementById('toast'),
   confirm: document.getElementById('confirm-dialog'),
   confirmText: document.getElementById('confirm-text'),
+  confirmOk: document.getElementById('confirm-ok'),
   lastRefreshed: document.getElementById('last-refreshed'),
   btnReload: document.getElementById('btn-reload'),
   btnRestartCcfleet: document.getElementById('btn-restart-ccfleet'),
@@ -214,6 +215,7 @@ async function startSession(project, btn) {
 
 async function killSession(session) {
   el.confirmText.textContent = `Kill session "${session.project_name}"?`;
+  el.confirmOk.textContent = 'Kill';
   el.confirm.showModal();
   el.confirm.addEventListener('close', async function handler() {
     el.confirm.removeEventListener('close', handler);
@@ -234,9 +236,16 @@ el.btnReload.addEventListener('click', () =>
   systemAction('/api/system/reload', el.btnReload, 'Config reloaded'),
 );
 
-el.btnRestartCcfleet.addEventListener('click', () =>
-  systemAction('/api/system/restart', el.btnRestartCcfleet, 'Restarting — page will reload…', { reload: 2500 }),
-);
+el.btnRestartCcfleet.addEventListener('click', () => {
+  el.confirmText.textContent = 'Restart ccfleet? The process will exit and reload only if a service manager (launchd or systemd) is running. If started manually, the server will go offline.';
+  el.confirmOk.textContent = 'Restart';
+  el.confirm.showModal();
+  el.confirm.addEventListener('close', function handler() {
+    el.confirm.removeEventListener('close', handler);
+    if (el.confirm.returnValue !== 'confirm') return;
+    systemAction('/api/system/restart', el.btnRestartCcfleet, 'Restarting — page will reload…', { reload: 2500 });
+  });
+});
 
 el.btnRestartTtyd.addEventListener('click', () =>
   systemAction('/api/system/ttyd/restart', el.btnRestartTtyd, 'ttyd restarting'),
