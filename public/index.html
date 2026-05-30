@@ -10,6 +10,11 @@
   <body>
     <header class="topbar">
       <img src="/logo.svg" alt="ccfleet" class="header-logo">
+      <div id="sys-stats" class="sys-stats" aria-label="system resources">
+        <span id="stat-cpu" class="stat" title="CPU load average"></span>
+        <span id="stat-mem" class="stat" title="Memory usage"></span>
+        <span id="stat-disk" class="stat" title="Disk usage"></span>
+      </div>
       <div class="meta">
         <button id="refresh" type="button" aria-label="refresh">refresh</button>
       </div>

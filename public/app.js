@@ -22,6 +22,9 @@ const el = {
   btnRestartCcfleet: document.getElementById('btn-restart-ccfleet'),
   btnRestartTtyd: document.getElementById('btn-restart-ttyd'),
   ttydRow: document.getElementById('ttyd-row'),
+  statCpu: document.getElementById('stat-cpu'),
+  statMem: document.getElementById('stat-mem'),
+  statDisk: document.getElementById('stat-disk'),
 };
 
 function escapeHtml(s) {
@@ -86,6 +89,31 @@ async function systemAction(endpoint, btn, successMsg, opts = {}) {
   }
 }
 
+function statLevel(pct) {
+  if (pct >= 90) return 'crit';
+  if (pct >= 70) return 'warn';
+  return 'ok';
+}
+
+function fmtBytes(bytes) {
+  const gb = bytes / (1024 ** 3);
+  return gb >= 1 ? `${gb.toFixed(1)}GB` : `${(bytes / (1024 ** 2)).toFixed(0)}MB`;
+}
+
+async function refreshResources() {
+  try {
+    const r = await api('/api/system/resources');
+    el.statCpu.textContent = `CPU ${r.cpu.pct}%`;
+    el.statCpu.className = `stat ${statLevel(r.cpu.pct)}`;
+    el.statMem.textContent = `RAM ${fmtBytes(r.mem.used)}/${fmtBytes(r.mem.total)}`;
+    el.statMem.className = `stat ${statLevel(r.mem.pct)}`;
+    el.statDisk.textContent = `Disk ${fmtBytes(r.disk.used)}/${fmtBytes(r.disk.total)}`;
+    el.statDisk.className = `stat ${statLevel(r.disk.pct)}`;
+  } catch {
+    // non-fatal: leave previous values in place
+  }
+}
+
 async function refresh() {
   try {
     const [projects, sessions] = await Promise.all([
@@ -99,6 +127,7 @@ async function refresh() {
   } catch (err) {
     showToast(err.message, 'error');
   }
+  refreshResources();
 }
 
 function render() {
@@ -215,6 +244,6 @@ el.btnRestartTtyd.addEventListener('click', () =>
 
 (async function init() {
   await loadConfig();
-  await refresh();
+  await Promise.all([refresh(), refreshResources()]);
   setInterval(refresh, POLL_MS);
 })();
