@@ -3,8 +3,11 @@
 require('dotenv').config();
 
 const { execFile } = require('child_process');
+const { promisify } = require('util');
 const fs = require('fs/promises');
 const os = require('os');
+
+const execFileAsync = promisify(execFile);
 const express = require('express');
 const helmet = require('helmet');
 const pinoHttp = require('pino-http');
@@ -275,10 +278,55 @@ app.get('/api/status/:session_name', async (req, res, next) => {
 
 // ---- system resources ----
 
+// On macOS, os.freemem() counts compressed pages at their pre-compression size,
+// producing "used" figures that exceed physical RAM. vm_stat gives the real picture:
+// wired (pinned kernel pages) + active (in-use app pages) + compressed (compressed
+// in place by the compressor) is what is genuinely consuming physical RAM.
+// Color coding uses the kernel's own pressure signal (0=normal, 1=warning, 2=critical)
+// rather than a raw percentage, because macOS manages memory aggressively and a high
+// percentage is normal — swap activity and kernel pressure are the real danger signs.
+async function getMemStats() {
+  const total = os.totalmem();
+
+  if (process.platform === 'darwin') {
+    try {
+      const [{ stdout: vmOut }, { stdout: pressureOut }] = await Promise.all([
+        execFileAsync('/usr/bin/vm_stat'),
+        execFileAsync('/usr/sbin/sysctl', ['-n', 'vm.memory_pressure']),
+      ]);
+      const pageSize = parseInt(vmOut.match(/page size of (\d+)/)?.[1] || '16384', 10);
+      const pages = (label) => {
+        const m = vmOut.match(new RegExp(`${label}:\\s+(\\d+)`));
+        return m ? parseInt(m[1], 10) * pageSize : 0;
+      };
+      const used = pages('Pages wired down') + pages('Pages active') + pages('Pages occupied by compressor');
+      const pressure = parseInt(pressureOut.trim(), 10); // 0=normal 1=warning 2=critical
+      return { used, total, pct: Math.round(used / total * 100), pressure };
+    } catch {
+      // fall through
+    }
+  }
+
+  if (process.platform === 'linux') {
+    try {
+      // MemAvailable (not MemFree) includes reclaimable page cache — the accurate
+      // "how much memory can a new process actually use" number on Linux.
+      const meminfo = await fs.readFile('/proc/meminfo', 'utf8');
+      const available = parseInt(meminfo.match(/MemAvailable:\s+(\d+)/)?.[1] || '0', 10) * 1024;
+      const used = total - available;
+      return { used, total, pct: Math.round(used / total * 100), pressure: null };
+    } catch {
+      // fall through
+    }
+  }
+
+  // Windows and fallback: os.freemem() is accurate here.
+  const used = total - os.freemem();
+  return { used, total, pct: Math.round(used / total * 100), pressure: null };
+}
+
 app.get('/api/system/resources', async (_req, res, next) => {
   try {
-    const totalMem = os.totalmem();
-    const usedMem = totalMem - os.freemem();
     const cores = os.cpus().length;
     const load1 = os.loadavg()[0];
 
@@ -286,9 +334,11 @@ app.get('/api/system/resources', async (_req, res, next) => {
     const diskTotal = statfs.blocks * statfs.bsize;
     const diskUsed = (statfs.blocks - statfs.bavail) * statfs.bsize;
 
+    const mem = await getMemStats();
+
     res.json({
       cpu: { pct: Math.min(100, Math.round(load1 / cores * 100)), load: parseFloat(load1.toFixed(2)), cores },
-      mem: { pct: Math.round(usedMem / totalMem * 100), used: usedMem, total: totalMem },
+      mem,
       disk: { pct: Math.round(diskUsed / diskTotal * 100), used: diskUsed, total: diskTotal },
     });
   } catch (err) {

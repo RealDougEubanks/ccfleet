@@ -96,6 +96,16 @@ function statLevel(pct) {
   return 'ok';
 }
 
+function memLevel(mem) {
+  // On macOS, use the kernel pressure signal; on Linux use percentage thresholds.
+  if (mem.pressure !== null && mem.pressure !== undefined) {
+    if (mem.pressure >= 2) return 'crit';
+    if (mem.pressure >= 1) return 'warn';
+    return 'ok';
+  }
+  return statLevel(mem.pct);
+}
+
 function fmtBytes(bytes) {
   const gb = bytes / (1024 ** 3);
   return gb >= 1 ? `${gb.toFixed(1)}GB` : `${(bytes / (1024 ** 2)).toFixed(0)}MB`;
@@ -107,7 +117,7 @@ async function refreshResources() {
     el.statCpu.textContent = `CPU ${r.cpu.pct}%`;
     el.statCpu.className = `stat ${statLevel(r.cpu.pct)}`;
     el.statMem.textContent = `RAM ${fmtBytes(r.mem.used)}/${fmtBytes(r.mem.total)}`;
-    el.statMem.className = `stat ${statLevel(r.mem.pct)}`;
+    el.statMem.className = `stat ${memLevel(r.mem)}`;
     el.statDisk.textContent = `Disk ${fmtBytes(r.disk.used)}/${fmtBytes(r.disk.total)}`;
     el.statDisk.className = `stat ${statLevel(r.disk.pct)}`;
   } catch {
