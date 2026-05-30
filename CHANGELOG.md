@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.2] — 2026-05-30
+
+### Fixed
+- **Accurate memory stats on macOS** — `os.freemem()` overcounts by reporting compressed pages at pre-compression size, producing figures like "15GB used" on an 8GB machine. Now uses `vm_stat` (wired + active + compressor pages) for the real physical footprint. Color coding uses `sysctl vm.memory_pressure` (0=normal, 1=warning, 2=critical) rather than a raw percentage, since macOS manages memory aggressively and a high percentage without swap pressure is not a problem.
+- **Accurate memory stats on Linux** — was reading `MemFree` from `/proc/meminfo`; now reads `MemAvailable`, which includes reclaimable page cache and gives the correct "memory a new process can actually use" figure.
+
 ## [0.9.1] — 2026-05-30
 
 ### Added
