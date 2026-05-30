@@ -1,6 +1,6 @@
 {
   "name": "ccfleet",
-  "version": "0.1.0",
+  "version": "0.9.1",
   "description": "Self-hosted web dashboard for managing Claude Code CLI sessions across git projects.",
   "private": true,
   "main": "server.js",

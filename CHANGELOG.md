@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.1] — 2026-05-30
+
+### Added
+- **System resource stats in header** — CPU load, RAM used/total, and disk used/total displayed as color-coded indicators (green < 70%, yellow 70–89%, red ≥ 90%). Sourced from `os.loadavg`, `os.freemem`, and `fs.statfs` with no new dependencies. Updates on every 5-second poll via `GET /api/system/resources`.
+
+### Fixed
+- **CSP `upgrade-insecure-requests` removed** — Helmet adds this directive by default, which caused browsers to silently rewrite sub-resource requests (CSS, JS, images) from HTTP to HTTPS. On plain-HTTP deployments (local network, Cloudflare Tunnel) this broke the entire UI. TLS is handled externally.
+- **Restart confirmation dialog** — Clicking Restart now shows a warning that the process will only come back automatically if launchd or systemd is managing it. The confirm button label also changes dynamically between "Kill" (session) and "Restart" (ccfleet).
+
+### Changed
+- `docs/ENV_VARS.md` — `REMOTE_CONTROL_PREFIX` default corrected from `MacMini` to `os.hostname()`
+- `docs/spec.md` — example command updated to use generic `mymachine-` prefix
+- `pm2` removed from `devDependencies` (was a low-severity ReDoS CVE); launchd and systemd are the documented production service managers
+
 ## [0.9.0] — 2026-05-29
 
 ### Added

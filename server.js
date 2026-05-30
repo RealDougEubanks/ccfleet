@@ -3,6 +3,8 @@
 require('dotenv').config();
 
 const { execFile } = require('child_process');
+const fs = require('fs/promises');
+const os = require('os');
 const express = require('express');
 const helmet = require('helmet');
 const pinoHttp = require('pino-http');
@@ -76,9 +78,12 @@ app.use(helmet({
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameSrc: ["'none'"],
+      // Transport encryption is handled externally (Cloudflare Tunnel / VPN).
+      // Disable upgrade-insecure-requests so the browser doesn't silently
+      // rewrite sub-resource requests to HTTPS on plain-HTTP deployments.
+      upgradeInsecureRequests: null,
     },
   },
-  // Transport encryption is handled externally (Cloudflare Tunnel / VPN).
   hsts: false,
 }));
 
@@ -262,6 +267,29 @@ app.get('/api/status/:session_name', async (req, res, next) => {
       session_name: session.session_name,
       current_command: session.current_command,
       status: session.status,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- system resources ----
+
+app.get('/api/system/resources', async (_req, res, next) => {
+  try {
+    const totalMem = os.totalmem();
+    const usedMem = totalMem - os.freemem();
+    const cores = os.cpus().length;
+    const load1 = os.loadavg()[0];
+
+    const statfs = await fs.statfs(getGitRoot());
+    const diskTotal = statfs.blocks * statfs.bsize;
+    const diskUsed = (statfs.blocks - statfs.bavail) * statfs.bsize;
+
+    res.json({
+      cpu: { pct: Math.min(100, Math.round(load1 / cores * 100)), load: parseFloat(load1.toFixed(2)), cores },
+      mem: { pct: Math.round(usedMem / totalMem * 100), used: usedMem, total: totalMem },
+      disk: { pct: Math.round(diskUsed / diskTotal * 100), used: diskUsed, total: diskTotal },
     });
   } catch (err) {
     next(err);

@@ -203,3 +203,19 @@ test('API responses set Cache-Control: private, no-store', async () => {
   const cc = res.headers.get('cache-control');
   assert.ok(cc && cc.includes('no-store'), `expected no-store, got: ${cc}`);
 });
+
+// ---- system resources -------------------------------------------------------
+
+test('GET /api/system/resources returns cpu, mem, disk with pct fields', async () => {
+  const res = await get('/api/system/resources');
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  for (const key of ['cpu', 'mem', 'disk']) {
+    assert.ok(typeof body[key] === 'object', `missing ${key}`);
+    assert.ok(typeof body[key].pct === 'number', `${key}.pct not a number`);
+    assert.ok(body[key].pct >= 0 && body[key].pct <= 100, `${key}.pct out of range: ${body[key].pct}`);
+  }
+  assert.ok(typeof body.cpu.cores === 'number' && body.cpu.cores > 0);
+  assert.ok(typeof body.mem.total === 'number' && body.mem.total > 0);
+  assert.ok(typeof body.disk.total === 'number' && body.disk.total > 0);
+});

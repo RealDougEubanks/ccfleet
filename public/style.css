@@ -63,6 +63,39 @@ html, body {
   font-size: 14px;
 }
 
+.sys-stats {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.stat {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.stat::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+  content: '';
+  background: var(--stat-color, var(--muted));
+}
+
+.stat.ok   { --stat-color: var(--ok); }
+.stat.warn { --stat-color: var(--warn); }
+.stat.crit { --stat-color: var(--danger); }
+
+@media (max-width: 520px) {
+  .sys-stats { gap: 10px; }
+  .stat { font-size: 12px; }
+}
+
 main {
   padding: 16px;
   max-width: 720px;
