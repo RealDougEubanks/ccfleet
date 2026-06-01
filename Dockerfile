@@ -6,17 +6,16 @@ RUN npm ci --omit=dev --ignore-scripts
 FROM node:20-alpine
 WORKDIR /app
 
-ARG APP_UID=1000
-RUN addgroup -g ${APP_UID} ccfleet && adduser -u ${APP_UID} -G ccfleet -S ccfleet
-
 COPY --from=deps /app/node_modules ./node_modules
 COPY server.js ./
 COPY lib/ ./lib/
 COPY public/ ./public/
 
-RUN chown -R ccfleet:ccfleet /app
+# node:20-alpine ships with a non-root 'node' user at UID/GID 1000.
+# Reuse it rather than creating a duplicate group.
+RUN chown -R node:node /app
 
-USER ccfleet
+USER node
 
 ENV NODE_ENV=production \
     PORT=3001
