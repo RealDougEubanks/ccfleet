@@ -14,20 +14,23 @@ generated-by: doc-refresh skill
 
 > **Prerequisites:** Node.js 20+, `tmux`, `claude` CLI, and a populated `~/git/` directory of repositories.
 
+**Option A — Docker**
+
 ```bash
-# 1. Clone and install
+git clone <repo-url>
+cd ccfleet
+cp .env.example .env   # fill in GIT_ROOT at minimum
+docker compose up -d
+```
+
+**Option B — Node directly**
+
+```bash
 git clone <repo-url>
 cd ccfleet
 npm install
-
-# 2. Configure environment
-cp .env.example .env
-# Edit .env — fill in GIT_ROOT at minimum
-
-# 3. Verify with tests
-npm test
-
-# 4. Run
+cp .env.example .env   # fill in GIT_ROOT at minimum
+npm test               # 80/80 should pass
 npm start
 ```
 
@@ -74,8 +77,10 @@ graph LR
 | Command | What it does |
 |---------|--------------|
 | `npm install` | Install dependencies |
-| `npm test` | Run the unit test suite |
+| `npm test` | Run the unit test suite (80 tests) |
+| `npm run lint` | Run ESLint across all source files |
 | `npm start` | Start the Express server |
+| `docker compose up -d` | Run in Docker (see `Dockerfile`, `docker-compose.yml`) |
 | `sudo bash scripts/install-launchd.sh` | Install as boot-time launchd services (macOS) |
 | `sudo bash scripts/install-systemd.sh` | Install as boot-time systemd services (Linux) |
 

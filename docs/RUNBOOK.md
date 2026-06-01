@@ -41,11 +41,32 @@ Expected healthy responses:
 | Log location | `~/Library/Logs/ccfleet/ccfleet.log` and `~/Library/Logs/ccfleet/ccfleet-error.log` |
 | Log format | JSON (`pino`), ISO timestamps |
 | Restart command | `launchctl kickstart -k system/com.ccfleet` |
-| Deployed via | macOS launchd LaunchDaemon (`launchd/com.ccfleet.plist`) |
+| Deployed via | macOS launchd (`launchd/com.ccfleet.plist`) **or** Docker (`docker-compose.yml`) |
 | Auth | Optional HTTP Basic (enabled when `BASIC_AUTH_USER` + `BASIC_AUTH_PASS` are set); otherwise delegated to Cloudflare Access |
 | Network exposure | Private VPN / Cloudflare Access only — see [`SECURITY.md`](../SECURITY.md) |
 
 ## Start / Stop / Restart
+
+### Docker
+
+```bash
+# Status
+docker compose ps
+
+# Start
+docker compose up -d
+
+# Restart ccfleet only
+docker compose restart ccfleet
+
+# Stop
+docker compose down
+
+# Tail logs
+docker compose logs -f
+```
+
+### launchd (macOS native)
 
 ```bash
 # Status (are both services running?)

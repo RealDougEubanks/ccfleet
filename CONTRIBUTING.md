@@ -23,9 +23,10 @@ generated-by: doc-refresh skill
    git checkout -b feature/short-description
    ```
 2. Make your changes.
-3. Run tests:
+3. Run tests and lint:
    ```bash
    npm test
+   npm run lint
    ```
 4. Start the server locally and exercise the change end-to-end:
    ```bash
@@ -38,7 +39,8 @@ generated-by: doc-refresh skill
 
 ## PR Checklist
 
-- [ ] `npm test` passes
+- [ ] `npm test` passes (80/80)
+- [ ] `npm run lint` passes (0 errors)
 - [ ] No new secrets or hardcoded credentials
 - [ ] Input handlers (any new HTTP route, any new shell-out) have unit tests for valid, invalid, oversized, and exception paths
 - [ ] Every `execFile` shell-out has a timeout
@@ -76,6 +78,7 @@ generated-by: doc-refresh skill
 | `test/health.test.js` | Health aggregation logic |
 | `test/git.test.js` | Origin URL parsing (HTTPS, SSH, subgroups, `.git` suffix) |
 | `test/claude.test.js` | Claude command builder and session-history detection |
+| `test/auth.test.js` | HTTP Basic auth middleware (enabled/disabled, bad credentials) |
 | `test/server.test.js` | HTTP routes — security headers, CSRF enforcement, env editor, session reload, system resources |
 
 Add a test file under `test/` for every new module. Use the built-in `node:test` runner — no extra dependencies.
