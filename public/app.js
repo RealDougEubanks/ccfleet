@@ -195,7 +195,12 @@ function renderSessionCard(s) {
     window.open(state.config.remote_control_url, '_blank', 'noopener');
   });
   card.querySelector('[data-action="attach"]').addEventListener('click', () => {
-    if (state.config.ttyd_url) window.open(state.config.ttyd_url, '_blank', 'noopener');
+    if (!state.config.ttyd_url) return;
+    const url = new URL(state.config.ttyd_url);
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+      url.hostname = window.location.hostname;
+    }
+    window.open(url.toString(), '_blank', 'noopener');
   });
   card.querySelector('[data-action="env"]').addEventListener('click', () => openEnvEditor(s.project_name));
   card.querySelector('[data-action="kill"]').addEventListener('click', () => killSession(s));

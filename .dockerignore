@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+test
+docs
+scripts
+launchd
+ecosystem.config.js
+eslint.config.js
+.env
+.env.*
+*.md
+LICENSE
+CHANGELOG.md

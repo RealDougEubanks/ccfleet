@@ -80,3 +80,23 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
           format: table
+
+  docker:
+    name: Docker Build & Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t ccfleet:ci .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ccfleet:ci
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
