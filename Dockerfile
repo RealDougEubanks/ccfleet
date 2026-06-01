@@ -6,7 +6,8 @@ RUN npm ci --omit=dev --ignore-scripts
 FROM node:20-alpine
 WORKDIR /app
 
-RUN addgroup -S ccfleet && adduser -S -G ccfleet ccfleet
+ARG APP_UID=1000
+RUN addgroup -g ${APP_UID} ccfleet && adduser -u ${APP_UID} -G ccfleet -S ccfleet
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY server.js ./

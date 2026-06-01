@@ -26,6 +26,8 @@ services:
       - CLAUDE_MODEL=${CLAUDE_MODEL:-}
       - CLAUDE_EFFORT=${CLAUDE_EFFORT:-}
       - CLAUDE_SKIP_PERMISSIONS=${CLAUDE_SKIP_PERMISSIONS:-false}
+      - TRUST_PROXY=${TRUST_PROXY:-172.16.0.0/12}
+      - TMUX_TMPDIR=/tmp/tmux-1000
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/healthz"]
       interval: 30s

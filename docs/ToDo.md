@@ -2,6 +2,15 @@
 
 ## Authentication & Security
 
+- [ ] **Rate-limit the `/health` deep-check endpoint separately** (`server.js`)
+  `/health` runs child processes (`tmux -V`, `claude --version`) on every call and is unauthenticated with no rate limit. Apply a tighter limiter (e.g. 10 req/min) to `/health` only, keeping `/healthz` and `/readyz` fully open for uptime monitors.
+
+- [ ] **Add `requireJson` to `DELETE /api/sessions/:name`** (`server.js:252`)
+  All other mutating routes use `requireJson` as a CSRF guard; DELETE is the only exception. Browsers require a CORS preflight for cross-origin DELETEs (which the server does not grant), but adding `requireJson` is consistent and closes the gap for non-browser callers.
+
+- [ ] **Per-project `CLAUDE_SKIP_PERMISSIONS` override**
+  Currently the flag is global — all sessions get `--dangerously-skip-permissions` or none do. Add a per-project opt-in (e.g. a `.ccfleet` config file in the project root) so high-trust projects can use it while others retain prompting.
+
 - [ ] **Read Cf-Access-Jwt-Assertion header to populate user identity in GUI**
   After Cloudflare Access is in front of the server, the `Cf-Access-Jwt-Assertion` JWT is injected on every request. Parse it server-side (verify signature against the Cloudflare JWKS endpoint for the Access application), extract the `email` claim, and pass it through `/api/config` so the header can show `@<email>`. No client-side JWT handling — verify only on the server.
   See: https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/

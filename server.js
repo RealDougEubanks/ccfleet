@@ -69,7 +69,7 @@ function reloadConfig() {
 
 const app = express();
 app.disable('x-powered-by');
-app.set('trust proxy', 'loopback');
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -144,7 +144,7 @@ if (authMiddleware) {
   app.use(authMiddleware);
   logger.info({ event: 'auth_mode', mode: 'basic' }, 'basic auth enabled');
 } else {
-  logger.info({ event: 'auth_mode', mode: 'none' }, 'basic auth not configured — access control delegated to network layer');
+  logger.warn({ event: 'auth_mode', mode: 'none' }, 'basic auth is DISABLED — all API routes are unauthenticated; ensure Cloudflare Access or equivalent is enforced at the network layer');
 }
 
 app.use((_req, res, next) => {
@@ -176,10 +176,18 @@ const updateEnvSchema = z.object({
 
 // ---- API routes ----
 
+const SAFE_URL_RE = /^https?:\/\//i;
+
 app.get('/api/config', (_req, res) => {
+  const rawRemote = process.env.REMOTE_CONTROL_URL || 'https://claude.ai/code';
+  const rawTtyd = process.env.TTYD_URL || '';
+  if (!SAFE_URL_RE.test(rawRemote)) {
+    logger.error({ event: 'config_error', field: 'REMOTE_CONTROL_URL' }, 'REMOTE_CONTROL_URL must start with http:// or https://');
+    return res.status(500).json({ error: 'server misconfiguration: invalid REMOTE_CONTROL_URL' });
+  }
   res.json({
-    remote_control_url: process.env.REMOTE_CONTROL_URL || 'https://claude.ai/code',
-    ttyd_url: process.env.TTYD_URL || '',
+    remote_control_url: rawRemote,
+    ttyd_url: SAFE_URL_RE.test(rawTtyd) ? rawTtyd : '',
   });
 });
 

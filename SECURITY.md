@@ -68,6 +68,17 @@ ccfleet does **not** handle:
 | `.env` editor: Zod schema + 64 KB read cap + null-byte strip + CRLF normalisation + atomic mode-`0600` write + `.gitignore` guard | `server.js` |
 | Session reload: `respawn-pane -k` reuses validated session name — no shell interpolation of user data | `lib/tmux.js` |
 
+## Docker Deployment — tmux Socket Risk
+
+> **SECURITY:** When running in Docker, `docker-compose.yml` bind-mounts the host's tmux socket into the container. Any process inside the container with access to that socket has full control of the host user's tmux environment — it can create sessions, kill sessions, and send arbitrary keystrokes to any running pane via `tmux send-keys`. Because tmux sessions run `claude` (optionally with `--dangerously-skip-permissions`), a compromised ccfleet process inside the container has effective unrestricted filesystem access as the host user.
+
+This risk is inherent to the design — ccfleet must control tmux to function. Mitigations:
+
+- Run ccfleet as a dedicated low-privilege user (the Dockerfile sets UID 1000 by default — override with `--build-arg APP_UID=<your-uid>`).
+- Do not run any other services in the same container.
+- Keep the Docker image updated and watch CI Trivy scan results.
+- Consider running ccfleet directly under launchd or systemd (without a container) if the tmux socket exposure is unacceptable.
+
 ## Network Exposure
 
 > **SECURITY:** ccfleet has no TLS by default. It must run only on a network where transport encryption is provided externally (Cloudflare Tunnel, WireGuard, OpenVPN). Never expose port `3001` directly to the public internet.

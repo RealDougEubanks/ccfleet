@@ -192,7 +192,8 @@ function renderSessionCard(s) {
     </div>
   `;
   card.querySelector('[data-action="open"]').addEventListener('click', () => {
-    window.open(state.config.remote_control_url, '_blank', 'noopener');
+    const u = state.config.remote_control_url;
+    if (/^https?:\/\//i.test(u)) window.open(u, '_blank', 'noopener');
   });
   card.querySelector('[data-action="attach"]').addEventListener('click', () => {
     if (!state.config.ttyd_url) return;
@@ -200,7 +201,7 @@ function renderSessionCard(s) {
     if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
       url.hostname = window.location.hostname;
     }
-    window.open(url.toString(), '_blank', 'noopener');
+    if (/^https?:$/i.test(url.protocol)) window.open(url.toString(), '_blank', 'noopener');
   });
   card.querySelector('[data-action="env"]').addEventListener('click', () => openEnvEditor(s.project_name));
   card.querySelector('[data-action="kill"]').addEventListener('click', () => killSession(s));
