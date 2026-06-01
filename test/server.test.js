@@ -34,9 +34,9 @@ function get(url, headers = {}) {
   return fetch(`${base}${url}`, { headers });
 }
 
-function post(url, body, extraHeaders = {}) {
+function post(url, body, extraHeaders = {}, method = 'POST') {
   return fetch(`${base}${url}`, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json', ...extraHeaders },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -117,6 +117,32 @@ test('GET /api/projects returns entry when git dir exists', async () => {
   }
 });
 
+// ---- sessions ---------------------------------------------------------------
+
+test('GET /api/sessions returns empty array when no tmux sessions exist', async () => {
+  const res = await get('/api/sessions');
+  assert.equal(res.status, 200);
+  const { sessions } = await res.json();
+  assert.ok(Array.isArray(sessions));
+});
+
+test('GET /api/projects session_name for dotted directory uses underscores', async () => {
+  // Regression guard: session_name must use toSessionName() so the .env
+  // button on an active session card can match back to the real directory.
+  const projectDir = path.join(tmpGitRoot, 'propagate.com');
+  await fs.mkdir(path.join(projectDir, '.git'), { recursive: true });
+  try {
+    const res = await get('/api/projects');
+    assert.equal(res.status, 200);
+    const { projects } = await res.json();
+    const p = projects.find((x) => x.name === 'propagate.com');
+    assert.ok(p, 'project not found in list');
+    assert.equal(p.session_name, 'propagate_com', 'session_name should replace dots with underscores');
+  } finally {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  }
+});
+
 // ---- sessions (validation only — no tmux required) --------------------------
 
 test('POST /api/sessions with no body returns 400', async () => {
@@ -190,10 +216,17 @@ test('POST /api/system/ttyd/restart without JSON content-type returns 415', asyn
 });
 
 test('POST /api/system/reload with JSON content-type succeeds', async () => {
-  const res = await post('/api/system/reload', {});
-  assert.equal(res.status, 200);
-  const body = await res.json();
-  assert.ok(Array.isArray(body.reloaded));
+  // reloadConfig() calls dotenv.config({ override: true }) which reads the real
+  // .env and can clobber GIT_ROOT. Restore it so subsequent tests still work.
+  const savedGitRoot = process.env.GIT_ROOT;
+  try {
+    const res = await post('/api/system/reload', {});
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.ok(Array.isArray(body.reloaded));
+  } finally {
+    process.env.GIT_ROOT = savedGitRoot;
+  }
 });
 
 // ---- cache-control ----------------------------------------------------------
@@ -202,6 +235,106 @@ test('API responses set Cache-Control: private, no-store', async () => {
   const res = await get('/api/projects');
   const cc = res.headers.get('cache-control');
   assert.ok(cc && cc.includes('no-store'), `expected no-store, got: ${cc}`);
+});
+
+// ---- env editor -------------------------------------------------------------
+
+test('GET /api/projects/:name/env returns empty content when .env absent', async () => {
+  const projectDir = path.join(tmpGitRoot, 'env-test');
+  await fs.mkdir(path.join(projectDir, '.git'), { recursive: true });
+  try {
+    const res = await get('/api/projects/env-test/env');
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.content, '');
+    assert.equal(body.exists, false);
+  } finally {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test('GET /api/projects/:name/env returns content when .env exists', async () => {
+  const projectDir = path.join(tmpGitRoot, 'env-test');
+  await fs.mkdir(path.join(projectDir, '.git'), { recursive: true });
+  await fs.writeFile(path.join(projectDir, '.env'), 'FOO=bar\n', { mode: 0o600 });
+  try {
+    const res = await get('/api/projects/env-test/env');
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.content, 'FOO=bar\n');
+    assert.equal(body.exists, true);
+  } finally {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test('GET /api/projects/:name/env returns 404 for unknown project', async () => {
+  const res = await get('/api/projects/no-such-project/env');
+  assert.equal(res.status, 404);
+});
+
+test('GET /api/projects/:name/env returns 400 for invalid project name', async () => {
+  const res = await get('/api/projects/bad%2Fname/env'); // slash in name
+  assert.equal(res.status, 400);
+});
+
+test('PUT /api/projects/:name/env writes .env atomically', async () => {
+  const projectDir = path.join(tmpGitRoot, 'env-test');
+  await fs.mkdir(path.join(projectDir, '.git'), { recursive: true });
+  try {
+    const res = await post('/api/projects/env-test/env', { content: 'FOO=bar\nBAR=baz\n' }, {}, 'PUT');
+    assert.equal(res.status, 200);
+    const written = await fs.readFile(path.join(projectDir, '.env'), 'utf8');
+    assert.equal(written, 'FOO=bar\nBAR=baz\n');
+  } finally {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test('PUT /api/projects/:name/env returns 404 for unknown project', async () => {
+  const res = await post('/api/projects/no-such/env', { content: '' }, {}, 'PUT');
+  assert.equal(res.status, 404);
+});
+
+test('PUT /api/projects/:name/env returns 415 without JSON content-type', async () => {
+  const res = await fetch(`${base}/api/projects/anything/env`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'text/plain' },
+    body: 'FOO=bar',
+  });
+  assert.equal(res.status, 415);
+});
+
+// ---- session reload ---------------------------------------------------------
+
+test('POST /api/projects/:name/sessions/reload with invalid name returns 400', async () => {
+  const res = await post('/api/projects/bad%2Fname/sessions/reload', {});
+  assert.equal(res.status, 400);
+});
+
+test('POST /api/projects/:name/sessions/reload for nonexistent project returns 404', async () => {
+  const res = await post('/api/projects/no-such-project/sessions/reload', {});
+  assert.equal(res.status, 404);
+});
+
+test('POST /api/projects/:name/sessions/reload without JSON content-type returns 415', async () => {
+  const res = await fetch(`${base}/api/projects/anything/sessions/reload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: '',
+  });
+  assert.equal(res.status, 415);
+});
+
+test('POST /api/projects/:name/sessions/reload for project with no active session returns 404', async () => {
+  const projectDir = path.join(tmpGitRoot, 'reload-test');
+  await fs.mkdir(path.join(projectDir, '.git'), { recursive: true });
+  try {
+    const res = await post('/api/projects/reload-test/sessions/reload', {});
+    assert.equal(res.status, 404);
+  } finally {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  }
 });
 
 // ---- system resources -------------------------------------------------------

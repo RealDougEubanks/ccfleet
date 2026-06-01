@@ -43,34 +43,38 @@ test('buildClaudeCommand omits --continue for fresh project', () => {
   const prev = process.env.CLAUDE_SKIP_PERMISSIONS;
   try {
     delete process.env.CLAUDE_SKIP_PERMISSIONS;
-    const cmd = buildClaudeCommand({
+    const args = buildClaudeCommand({
       remoteControlName: 'MacMini-ClaudeMarketplace',
       continueExisting: false,
     });
-    assert.equal(cmd.includes('--continue'), false);
-    assert.equal(cmd.includes('--dangerously-skip-permissions'), false);
-    assert.equal(cmd.includes('--model claude-sonnet-4-6'), true);
-    assert.equal(cmd.includes('--effort medium'), true);
-    assert.equal(cmd.includes('--remote-control MacMini-ClaudeMarketplace'), true);
+    assert.ok(Array.isArray(args), 'should return an array');
+    assert.equal(args.includes('--continue'), false);
+    assert.equal(args.includes('--dangerously-skip-permissions'), false);
+    assert.equal(args.includes('--model'), true);
+    assert.equal(args.includes('claude-sonnet-4-6'), true);
+    assert.equal(args.includes('--effort'), true);
+    assert.equal(args.includes('medium'), true);
+    assert.equal(args.includes('--remote-control'), true);
+    assert.equal(args.includes('MacMini-ClaudeMarketplace'), true);
   } finally {
     if (prev !== undefined) process.env.CLAUDE_SKIP_PERMISSIONS = prev;
   }
 });
 
 test('buildClaudeCommand includes --continue when history exists', () => {
-  const cmd = buildClaudeCommand({
+  const args = buildClaudeCommand({
     remoteControlName: 'MacMini-x',
     continueExisting: true,
   });
-  assert.equal(cmd.includes('--continue'), true);
+  assert.equal(args.includes('--continue'), true);
 });
 
 test('buildClaudeCommand includes --dangerously-skip-permissions when CLAUDE_SKIP_PERMISSIONS=true', () => {
   const prev = process.env.CLAUDE_SKIP_PERMISSIONS;
   try {
     process.env.CLAUDE_SKIP_PERMISSIONS = 'true';
-    const cmd = buildClaudeCommand({ remoteControlName: 'MacMini-x', continueExisting: false });
-    assert.equal(cmd.includes('--dangerously-skip-permissions'), true);
+    const args = buildClaudeCommand({ remoteControlName: 'MacMini-x', continueExisting: false });
+    assert.equal(args.includes('--dangerously-skip-permissions'), true);
   } finally {
     if (prev === undefined) delete process.env.CLAUDE_SKIP_PERMISSIONS;
     else process.env.CLAUDE_SKIP_PERMISSIONS = prev;
@@ -83,9 +87,9 @@ test('buildClaudeCommand uses CLAUDE_MODEL and CLAUDE_EFFORT from env', () => {
   try {
     process.env.CLAUDE_MODEL = 'claude-opus-4-7';
     process.env.CLAUDE_EFFORT = 'high';
-    const cmd = buildClaudeCommand({ remoteControlName: 'MacMini-x', continueExisting: false });
-    assert.equal(cmd.includes('--model claude-opus-4-7'), true);
-    assert.equal(cmd.includes('--effort high'), true);
+    const args = buildClaudeCommand({ remoteControlName: 'MacMini-x', continueExisting: false });
+    assert.equal(args.includes('claude-opus-4-7'), true);
+    assert.equal(args.includes('high'), true);
   } finally {
     if (prevModel === undefined) delete process.env.CLAUDE_MODEL;
     else process.env.CLAUDE_MODEL = prevModel;

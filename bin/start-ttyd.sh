@@ -15,6 +15,10 @@ fi
 
 TTYD_PORT="${TTYD_PORT:-7681}"
 
+# Unset credentials before exec — ttyd spawns a shell and users can read
+# the process environment via printenv, so sensitive values must not be present.
+unset BASIC_AUTH_USER BASIC_AUTH_PASS
+
 # -A: attach to 'main' if it exists, create it if not.
 # This avoids a crash loop at boot when no tmux server is running yet.
 exec /opt/homebrew/bin/ttyd \

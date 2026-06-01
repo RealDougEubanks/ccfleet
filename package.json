@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test 'test/**/*.test.js'"
+    "test": "node --test test/*.test.js",
+    "lint": "eslint ."
   },
   "engines": {
     "node": ">=20"
@@ -21,6 +22,10 @@
     "pino-http": "^10.3.0",
     "zod": "^3.23.8"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0"
+  },
   "license": "MIT"
 }

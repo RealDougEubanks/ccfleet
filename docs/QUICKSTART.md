@@ -1,6 +1,6 @@
 <!--
 doc: QUICKSTART
-last-refreshed: 2026-05-29
+last-refreshed: 2026-06-01
 generated-by: doc-refresh skill
 -->
 
@@ -42,7 +42,7 @@ End-to-end setup and verification for a fresh install on a Mac. Follow the steps
    npm test
    ```
 
-   Expected: `34 pass, 0 fail`.
+   Expected: `80 pass, 0 fail`.
 
 4. Start the server in the foreground:
 
@@ -105,7 +105,7 @@ End-to-end setup and verification for a fresh install on a Mac. Follow the steps
    tmux attach -t ccfleet
    ```
 
-   Expected: the `claude` TUI running with `--model claude-sonnet-4-6`, `--effort medium`, and `--remote-control MacMini-<originProjectName>`. `--continue` is included if the project has prior session history. `--dangerously-skip-permissions` is included only if `CLAUDE_SKIP_PERMISSIONS=true` is set in `.env`.
+   Expected: the `claude` TUI running with `--model claude-sonnet-4-6`, `--effort medium`, and `--remote-control <hostname>-<originProjectName>` (where `<hostname>` is the machine hostname, or the value of `REMOTE_CONTROL_PREFIX` if set). `--continue` is included if the project has prior session history. `--dangerously-skip-permissions` is included only if `CLAUDE_SKIP_PERMISSIONS=true` is set in `.env`.
 
 5. Detach with `Ctrl-b` then `d`.
 
@@ -120,7 +120,42 @@ End-to-end setup and verification for a fresh install on a Mac. Follow the steps
 
 7. Stop the foreground server with `Ctrl-C`.
 
-## Step 3 — Install as boot services (launchd)
+## Step 3 — Choose a deployment method
+
+Pick **one** of the two options below. Docker is the easiest path on Linux or any machine with Docker installed. launchd is the native path for a persistent Mac service.
+
+### Option A — Docker (recommended for Linux, or if Docker is already installed)
+
+> **SECURITY:** The container runs as a non-root `ccfleet` user. Mount `GIT_ROOT` read-only. Never bake secrets into the image — pass them via environment variables or a `.env` file.
+
+1. Copy your `.env` file (or set environment variables) and run:
+
+   ```bash
+   docker compose up -d
+   ```
+
+2. Confirm the container is healthy:
+
+   ```bash
+   docker compose ps
+   curl -fsS http://localhost:3001/healthz
+   ```
+
+3. Tail logs:
+
+   ```bash
+   docker compose logs -f
+   ```
+
+4. To stop:
+
+   ```bash
+   docker compose down
+   ```
+
+> **Note:** The `docker-compose.yml` mounts the host tmux socket (`/tmp/tmux-${UID}`) so the container can list and manage sessions. tmux must be running on the host.
+
+### Option B — Install as boot services (launchd)
 
 ccfleet and ttyd run as **LaunchDaemons** — macOS system services that start at boot, before any user logs in.
 
@@ -189,18 +224,21 @@ ccfleet and ttyd run as **LaunchDaemons** — macOS system services that start a
 
    | Section | Expected |
    |---------|----------|
-   | Header | ccfleet logo on the left, **refresh** button |
+   | Header | ccfleet logo on the left, CPU/RAM/Disk stats, **refresh** button |
    | Active sessions | Empty state message ("No active sessions.") |
-   | Available projects | One row per git repo under `GIT_ROOT` |
+   | Available projects | One row per git repo under `GIT_ROOT`, each with a **.env** and **Start session** button |
 
 5. Tap **Start session** on any project. Within ~5 seconds:
 
    - The project should disappear from Available projects.
    - A card should appear under Active sessions with a green `active` badge and the elapsed start time.
+   - The card has **Open**, **Attach**, **.env**, and **Kill** buttons.
 
-6. Tap **Open** on the card. A new tab should open at `https://claude.ai/code`.
+6. Tap **.env** on any card or row to open the `.env` editor. Edit the content and tap **Save** to write it to `<GIT_ROOT>/<project>/.env`. If the project has an active session, a **Save & reload** button also appears — tapping it saves the file and restarts the `claude` process with `--continue` so the new values take effect without losing conversation history.
 
-7. Tap **Kill** on the card. Confirm in the dialog. The card should disappear and the project should return to Available projects.
+7. Tap **Open** on an active session card. A new tab should open at `https://claude.ai/code`.
+
+8. Tap **Kill** on the card. Confirm in the dialog. The card should disappear and the project should return to Available projects.
 
 ## Step 5 — Optional: in-browser terminal (`ttyd`)
 
@@ -230,7 +268,7 @@ ttyd is managed automatically by the LaunchDaemon installed in Step 3. If you sk
 
 | Step | Pass criteria |
 |------|---------------|
-| Step 1 | All five `curl` probes return the expected JSON; `npm test` is 34/34 |
+| Step 1 | All five `curl` probes return the expected JSON; `npm test` is 80/80 |
 | Step 2 | `POST` returns `201`, tmux shows the session, `claude` is running with the expected flags, `DELETE` returns `204` |
 | Step 3 | Both launchd services listed with PIDs after a reboot |
 | Step 4 | Dashboard loads, Start/Kill work from the phone |

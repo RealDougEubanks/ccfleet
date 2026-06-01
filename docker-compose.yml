@@ -1,0 +1,36 @@
+services:
+  ccfleet:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      # Mount the directory that contains your git projects (read-only)
+      - type: bind
+        source: ${GIT_ROOT:-/srv/git}
+        target: /git
+        read_only: true
+      # Mount the host tmux socket so ccfleet can manage sessions
+      - type: bind
+        source: /tmp/tmux-${UID:-1000}
+        target: /tmp/tmux-1000
+    environment:
+      - PORT=3001
+      - GIT_ROOT=/git
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - TTYD_URL=${TTYD_URL:-}
+      - REMOTE_CONTROL_URL=${REMOTE_CONTROL_URL:-https://claude.ai/code}
+      - REMOTE_CONTROL_PREFIX=${REMOTE_CONTROL_PREFIX:-}
+      - BASIC_AUTH_USER=${BASIC_AUTH_USER:-}
+      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS:-}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-}
+      - CLAUDE_EFFORT=${CLAUDE_EFFORT:-}
+      - CLAUDE_SKIP_PERMISSIONS=${CLAUDE_SKIP_PERMISSIONS:-false}
+      - TRUST_PROXY=${TRUST_PROXY:-172.16.0.0/12}
+      - TMUX_TMPDIR=/tmp/tmux-1000
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

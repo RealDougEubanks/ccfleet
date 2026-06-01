@@ -1,6 +1,6 @@
 <!--
 doc: README
-last-refreshed: 2026-05-29
+last-refreshed: 2026-06-01
 generated-by: doc-refresh skill
 -->
 
@@ -14,20 +14,23 @@ generated-by: doc-refresh skill
 
 > **Prerequisites:** Node.js 20+, `tmux`, `claude` CLI, and a populated `~/git/` directory of repositories.
 
+**Option A — Docker**
+
 ```bash
-# 1. Clone and install
+git clone <repo-url>
+cd ccfleet
+cp .env.example .env   # fill in GIT_ROOT at minimum
+docker compose up -d
+```
+
+**Option B — Node directly**
+
+```bash
 git clone <repo-url>
 cd ccfleet
 npm install
-
-# 2. Configure environment
-cp .env.example .env
-# Edit .env — fill in GIT_ROOT at minimum
-
-# 3. Verify with tests
-npm test
-
-# 4. Run
+cp .env.example .env   # fill in GIT_ROOT at minimum
+npm test               # 80/80 should pass
 npm start
 ```
 
@@ -57,7 +60,7 @@ graph LR
 |------|---------|
 | `server.js` | Express app, all HTTP routes |
 | `lib/projects.js` | Scans `GIT_ROOT` for git repositories |
-| `lib/tmux.js` | Wraps `tmux list-sessions`, `new-session`, `kill-session` |
+| `lib/tmux.js` | Wraps `tmux list-sessions`, `new-session`, `kill-session`, `respawn-pane` |
 | `lib/git.js` | Extracts the project name from `git remote get-url origin` |
 | `lib/claude.js` | Builds the `claude` launch command and checks for prior session history |
 | `lib/health.js` | Synthetic probes for `tmux`, `claude`, and `GIT_ROOT` |
@@ -74,8 +77,10 @@ graph LR
 | Command | What it does |
 |---------|--------------|
 | `npm install` | Install dependencies |
-| `npm test` | Run the unit test suite |
+| `npm test` | Run the unit test suite (80 tests) |
+| `npm run lint` | Run ESLint across all source files |
 | `npm start` | Start the Express server |
+| `docker compose up -d` | Run in Docker (see `Dockerfile`, `docker-compose.yml`) |
 | `sudo bash scripts/install-launchd.sh` | Install as boot-time launchd services (macOS) |
 | `sudo bash scripts/install-systemd.sh` | Install as boot-time systemd services (Linux) |
 
@@ -90,7 +95,7 @@ See [`docs/ENV_VARS.md`](docs/ENV_VARS.md) for the full reference.
 | `CLAUDE_MODEL` | no | Model passed to `--model` (default `claude-sonnet-4-6`) |
 | `CLAUDE_EFFORT` | no | Effort level: `low`, `medium`, `high`, or `highest` (default `medium`) |
 | `CLAUDE_SKIP_PERMISSIONS` | no | Set to `true` to pass `--dangerously-skip-permissions` — **disables all file permission checks**. Default `false`. See warning below. |
-| `REMOTE_CONTROL_PREFIX` | no | Prefix for `--remote-control` identifiers (default `MacMini`) |
+| `REMOTE_CONTROL_PREFIX` | no | Prefix for `--remote-control` identifiers (default: machine hostname via `os.hostname()`) |
 | `TTYD_URL` | no | URL of optional `ttyd` terminal |
 | `REMOTE_CONTROL_URL` | no | Override for the Open button (default `https://claude.ai/code`) |
 | `LOG_LEVEL` | no | `pino` log level (default `info`) |

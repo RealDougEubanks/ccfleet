@@ -1,6 +1,6 @@
 <!--
 doc: RUNBOOK
-last-refreshed: 2026-05-29
+last-refreshed: 2026-06-01
 generated-by: doc-refresh skill
 -->
 
@@ -41,11 +41,32 @@ Expected healthy responses:
 | Log location | `~/Library/Logs/ccfleet/ccfleet.log` and `~/Library/Logs/ccfleet/ccfleet-error.log` |
 | Log format | JSON (`pino`), ISO timestamps |
 | Restart command | `launchctl kickstart -k system/com.ccfleet` |
-| Deployed via | macOS launchd LaunchDaemon (`launchd/com.ccfleet.plist`) |
+| Deployed via | macOS launchd (`launchd/com.ccfleet.plist`) **or** Docker (`docker-compose.yml`) |
 | Auth | Optional HTTP Basic (enabled when `BASIC_AUTH_USER` + `BASIC_AUTH_PASS` are set); otherwise delegated to Cloudflare Access |
 | Network exposure | Private VPN / Cloudflare Access only — see [`SECURITY.md`](../SECURITY.md) |
 
 ## Start / Stop / Restart
+
+### Docker
+
+```bash
+# Status
+docker compose ps
+
+# Start
+docker compose up -d
+
+# Restart ccfleet only
+docker compose restart ccfleet
+
+# Stop
+docker compose down
+
+# Tail logs
+docker compose logs -f
+```
+
+### launchd (macOS native)
 
 ```bash
 # Status (are both services running?)
@@ -83,6 +104,11 @@ npm start
 | `POST /api/sessions` succeeds but the session never appears in Remote Control | Claude is blocked on the workspace-trust dialog (ccfleet should pre-trust — verify `~/.claude.json` has `projects[<path>].hasTrustDialogAccepted = true`) | `tmux attach -t <name>` to dismiss the prompt; check the log line `trust_granted` field |
 | Rate limit (`429`) hit | More than 120 requests/minute from one IP | Wait one minute; if expected, raise the limit in `server.js` |
 | ttyd crash-loops at boot | `tmux` server not running yet when ttyd starts | The launchd wrapper uses `tmux new-session -A -s main` which creates the server on first attach — this should self-heal |
+| `.env` save returns `422` | The project's `.env` file is larger than 64 KB | Reduce the file size or edit it directly on the host with a text editor |
+| `.env` save returns `404` for a project that exists | The project directory exists but has no `.git` entry, so `projectExists()` returns false | Confirm `ls <GIT_ROOT>/<project>/.git` exists |
+| **Save & reload** button not visible in the env dialog | No active tmux session for that project | Start a session first via **Start session**, then open the env editor |
+| **Save & reload** returns `404` with "no active session" | The session was killed between the dialog opening and the reload click | Start a new session after saving |
+| Session reload (respawn-pane) silently fails — claude does not restart | `tmux` version older than 3.0 (no `-k` flag on `respawn-pane`) | `tmux -V` to check version; upgrade with `brew upgrade tmux` on macOS |
 
 ## Environment Variables
 

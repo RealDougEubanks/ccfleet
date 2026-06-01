@@ -172,6 +172,12 @@ h2 {
   justify-content: space-between;
 }
 
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 button {
   min-height: var(--tap);
   padding: 0 14px;
@@ -254,3 +260,39 @@ footer {
   padding: 16px;
   color: var(--muted);
 }
+
+#env-dialog {
+  max-width: 600px;
+  width: min(600px, 95vw);
+}
+
+.env-dialog-title {
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+}
+
+.env-note {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+#env-content {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-sizing: border-box;
+}
+
+#env-content:focus { outline: 2px solid var(--accent); outline-offset: 1px; }

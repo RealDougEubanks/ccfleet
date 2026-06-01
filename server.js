@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const { randomBytes } = require('crypto');
 const fs = require('fs/promises');
 const os = require('os');
 
@@ -20,7 +21,7 @@ const { buildAuth } = require('./lib/auth');
 const { listProjects, projectExists } = require('./lib/projects');
 const tmux = require('./lib/tmux');
 const health = require('./lib/health');
-const { isValidSessionName, isValidProjectName } = require('./lib/sanitize');
+const { isValidSessionName, isValidProjectName, toSessionName } = require('./lib/sanitize');
 
 const PORT = Number(process.env.PORT || 3001);
 const REMOTE_NAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -68,7 +69,7 @@ function reloadConfig() {
 
 const app = express();
 app.disable('x-powered-by');
-app.set('trust proxy', 'loopback');
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -96,7 +97,8 @@ app.use(pinoHttp({ logger, customLogLevel: (req, res, err) => {
   return 'info';
 }}));
 
-app.use(express.json({ limit: '1kb' }));
+// 64kb accommodates .env files; all routes enforce tighter limits via Zod schemas.
+app.use(express.json({ limit: '64kb' }));
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -142,7 +144,7 @@ if (authMiddleware) {
   app.use(authMiddleware);
   logger.info({ event: 'auth_mode', mode: 'basic' }, 'basic auth enabled');
 } else {
-  logger.info({ event: 'auth_mode', mode: 'none' }, 'basic auth not configured — access control delegated to network layer');
+  logger.warn({ event: 'auth_mode', mode: 'none' }, 'basic auth is DISABLED — all API routes are unauthenticated; ensure Cloudflare Access or equivalent is enforced at the network layer');
 }
 
 app.use((_req, res, next) => {
@@ -168,12 +170,24 @@ const createSessionSchema = z.object({
   project_name: z.string().min(1).max(64),
 }).strict();
 
+const updateEnvSchema = z.object({
+  content: z.string().max(65536),
+}).strict();
+
 // ---- API routes ----
 
+const SAFE_URL_RE = /^https?:\/\//i;
+
 app.get('/api/config', (_req, res) => {
+  const rawRemote = process.env.REMOTE_CONTROL_URL || 'https://claude.ai/code';
+  const rawTtyd = process.env.TTYD_URL || '';
+  if (!SAFE_URL_RE.test(rawRemote)) {
+    logger.error({ event: 'config_error', field: 'REMOTE_CONTROL_URL' }, 'REMOTE_CONTROL_URL must start with http:// or https://');
+    return res.status(500).json({ error: 'server misconfiguration: invalid REMOTE_CONTROL_URL' });
+  }
   res.json({
-    remote_control_url: process.env.REMOTE_CONTROL_URL || 'https://claude.ai/code',
-    ttyd_url: process.env.TTYD_URL || '',
+    remote_control_url: rawRemote,
+    ttyd_url: SAFE_URL_RE.test(rawTtyd) ? rawTtyd : '',
   });
 });
 
@@ -192,8 +206,14 @@ app.get('/api/sessions', async (_req, res, next) => {
       tmux.listSessions(),
       listProjects(getGitRoot()),
     ]);
-    const knownSessionNames = new Set(projects.map((p) => p.session_name));
-    const sessions = allSessions.filter((s) => knownSessionNames.has(s.session_name));
+    // Index by session_name so we can restore the real directory name.
+    // listSessions() sets project_name = session_name (dots replaced with
+    // underscores), which breaks .env lookups for directories like
+    // PropagateHosting.com whose session name is PropagateHosting_com.
+    const projectBySession = new Map(projects.map((p) => [p.session_name, p]));
+    const sessions = allSessions
+      .filter((s) => projectBySession.has(s.session_name))
+      .map((s) => ({ ...s, project_name: projectBySession.get(s.session_name).name }));
     res.json({ sessions });
   } catch (err) {
     next(err);
@@ -272,6 +292,111 @@ app.get('/api/status/:session_name', async (req, res, next) => {
       status: session.status,
     });
   } catch (err) {
+    next(err);
+  }
+});
+
+// ---- project .env editor ----
+
+const GITIGNORE_MAX_BYTES = 1024 * 1024; // 1 MB — a larger .gitignore is almost certainly not a real one
+
+async function ensureEnvIgnored(gitignorePath) {
+  let existing = '';
+  try {
+    const stat = await fs.stat(gitignorePath);
+    if (stat.size > GITIGNORE_MAX_BYTES) return; // too large to be a real .gitignore; skip safely
+    existing = await fs.readFile(gitignorePath, 'utf8');
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  // Check whether any line already covers .env (exact, prefixed, or glob).
+  const lines = existing.split('\n');
+  const alreadyCovered = lines.some((l) => /^(\*\.env|\/?.env)$/.test(l.trim()));
+  if (alreadyCovered) return;
+  const separator = existing.length > 0 && !existing.endsWith('\n') ? '\n' : '';
+  await fs.appendFile(gitignorePath, `${separator}.env\n`);
+}
+
+app.get('/api/projects/:project_name/env', async (req, res, next) => {
+  try {
+    const { project_name: projectName } = req.params;
+    if (!isValidProjectName(projectName)) {
+      return res.status(400).json({ error: 'invalid project name' });
+    }
+    if (!(await projectExists(getGitRoot(), projectName))) {
+      return res.status(404).json({ error: 'project not found' });
+    }
+    const envPath = path.join(getGitRoot(), projectName, '.env');
+    try {
+      const stat = await fs.stat(envPath);
+      if (stat.size > 65536) {
+        return res.status(422).json({ error: '.env file exceeds maximum size' });
+      }
+      const content = await fs.readFile(envPath, 'utf8');
+      return res.json({ content, exists: true });
+    } catch (err) {
+      if (err.code === 'ENOENT') return res.json({ content: '', exists: false });
+      throw err;
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.put('/api/projects/:project_name/env', requireJson, async (req, res, next) => {
+  try {
+    const { project_name: projectName } = req.params;
+    if (!isValidProjectName(projectName)) {
+      return res.status(400).json({ error: 'invalid project name' });
+    }
+    if (!(await projectExists(getGitRoot(), projectName))) {
+      return res.status(404).json({ error: 'project not found' });
+    }
+    const parsed = updateEnvSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'invalid request body' });
+    }
+    // Normalize line endings and strip null bytes.
+    const content = parsed.data.content
+      .split('\x00').join('')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n');
+    const projectDir = path.join(getGitRoot(), projectName);
+    const envPath = path.join(projectDir, '.env');
+    const tmp = `${envPath}.ccfleet.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
+    try {
+      await fs.writeFile(tmp, content, { mode: 0o600 });
+      await fs.rename(tmp, envPath);
+    } catch (err) {
+      await fs.unlink(tmp).catch(() => {});
+      throw err;
+    }
+
+    // Ensure .env is in the project's .gitignore so it isn't accidentally committed.
+    await ensureEnvIgnored(path.join(projectDir, '.gitignore'));
+
+    logger.info({ event: 'env_updated', project: projectName }, '.env updated');
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/projects/:project_name/sessions/reload', requireJson, async (req, res, next) => {
+  try {
+    const { project_name: projectName } = req.params;
+    if (!isValidProjectName(projectName)) {
+      return res.status(400).json({ error: 'invalid project name' });
+    }
+    if (!(await projectExists(getGitRoot(), projectName))) {
+      return res.status(404).json({ error: 'project not found' });
+    }
+    const sessionName = toSessionName(projectName);
+    await tmux.reloadSession(sessionName, getGitRoot(), projectName);
+    logger.info({ event: 'session_reloaded', project: projectName }, 'session reloaded to apply updated env');
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.code === 'SESSION_NOT_FOUND') return res.status(404).json({ error: 'no active session for this project' });
     next(err);
   }
 });

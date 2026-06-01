@@ -23,6 +23,12 @@ const el = {
   btnRestartCcfleet: document.getElementById('btn-restart-ccfleet'),
   btnRestartTtyd: document.getElementById('btn-restart-ttyd'),
   ttydRow: document.getElementById('ttyd-row'),
+  envDialog: document.getElementById('env-dialog'),
+  envDialogTitle: document.getElementById('env-dialog-title'),
+  envContent: document.getElementById('env-content'),
+  envSave: document.getElementById('env-save'),
+  envReload: document.getElementById('env-reload'),
+  envCancel: document.getElementById('env-cancel'),
   statCpu: document.getElementById('stat-cpu'),
   statMem: document.getElementById('stat-mem'),
   statDisk: document.getElementById('stat-disk'),
@@ -181,15 +187,23 @@ function renderSessionCard(s) {
     <div class="card-actions">
       <button class="primary" data-action="open">Open</button>
       <button data-action="attach" ${state.config.ttyd_url ? '' : 'disabled'}>Attach</button>
+      <button data-action="env">.env</button>
       <button class="danger" data-action="kill">Kill</button>
     </div>
   `;
   card.querySelector('[data-action="open"]').addEventListener('click', () => {
-    window.open(state.config.remote_control_url, '_blank', 'noopener');
+    const u = state.config.remote_control_url;
+    if (/^https?:\/\//i.test(u)) window.open(u, '_blank', 'noopener');
   });
   card.querySelector('[data-action="attach"]').addEventListener('click', () => {
-    if (state.config.ttyd_url) window.open(state.config.ttyd_url, '_blank', 'noopener');
+    if (!state.config.ttyd_url) return;
+    const url = new URL(state.config.ttyd_url);
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+      url.hostname = window.location.hostname;
+    }
+    if (/^https?:$/i.test(url.protocol)) window.open(url.toString(), '_blank', 'noopener');
   });
+  card.querySelector('[data-action="env"]').addEventListener('click', () => openEnvEditor(s.project_name));
   card.querySelector('[data-action="kill"]').addEventListener('click', () => killSession(s));
   return card;
 }
@@ -199,8 +213,12 @@ function renderProjectRow(p) {
   li.className = 'row';
   li.innerHTML = `
     <span class="project-name">${escapeHtml(p.name)}</span>
-    <button class="primary" data-action="start">Start session</button>
+    <div class="row-actions">
+      <button data-action="env">.env</button>
+      <button class="primary" data-action="start">Start session</button>
+    </div>
   `;
+  li.querySelector('[data-action="env"]').addEventListener('click', () => openEnvEditor(p.name));
   const btn = li.querySelector('[data-action="start"]');
   btn.addEventListener('click', () => startSession(p, btn));
   return li;
@@ -239,6 +257,78 @@ async function killSession(session) {
     }
   });
 }
+
+let envEditorProject = null;
+
+async function openEnvEditor(projectName) {
+  envEditorProject = projectName;
+  el.envDialogTitle.textContent = `${projectName} / .env`;
+  el.envContent.value = '';
+  el.envContent.disabled = true;
+  el.envSave.disabled = true;
+  el.envReload.disabled = true;
+  el.envReload.hidden = !state.sessions.some((s) => s.project_name === projectName);
+  el.envDialog.showModal();
+  try {
+    const data = await api(`/api/projects/${encodeURIComponent(projectName)}/env`);
+    el.envContent.value = data.content;
+    el.envContent.disabled = false;
+    el.envSave.disabled = false;
+    el.envReload.disabled = false;
+  } catch (err) {
+    showToast(err.message, 'error');
+    el.envDialog.close();
+  }
+}
+
+el.envCancel.addEventListener('click', () => el.envDialog.close());
+el.envDialog.addEventListener('close', () => { envEditorProject = null; });
+
+el.envSave.addEventListener('click', async () => {
+  if (!envEditorProject) return;
+  el.envSave.disabled = true;
+  el.envReload.disabled = true;
+  try {
+    await api(`/api/projects/${encodeURIComponent(envEditorProject)}/env`, {
+      method: 'PUT',
+      body: JSON.stringify({ content: el.envContent.value }),
+    });
+    showToast(`.env saved for ${envEditorProject}`);
+    el.envDialog.close();
+  } catch (err) {
+    showToast(err.message, 'error');
+    el.envSave.disabled = false;
+    el.envReload.disabled = false;
+  }
+});
+
+el.envReload.addEventListener('click', async () => {
+  if (!envEditorProject) return;
+  el.envSave.disabled = true;
+  el.envReload.disabled = true;
+  try {
+    await api(`/api/projects/${encodeURIComponent(envEditorProject)}/env`, {
+      method: 'PUT',
+      body: JSON.stringify({ content: el.envContent.value }),
+    });
+  } catch (saveErr) {
+    showToast(`Save failed: ${saveErr.message}`, 'error');
+    el.envSave.disabled = false;
+    el.envReload.disabled = false;
+    return;
+  }
+  // .env saved — now reload the session. Close the dialog regardless; the
+  // save succeeded and re-enabling the form would let the user overwrite again.
+  el.envDialog.close();
+  try {
+    await api(`/api/projects/${encodeURIComponent(envEditorProject)}/sessions/reload`, {
+      method: 'POST',
+    });
+    showToast(`Saved and reloaded ${envEditorProject}`);
+  } catch (reloadErr) {
+    showToast(`.env saved but reload failed: ${reloadErr.message}`, 'error');
+  }
+});
 
 el.refresh.addEventListener('click', refresh);
 
