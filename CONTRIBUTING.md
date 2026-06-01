@@ -1,6 +1,6 @@
 <!--
 doc: CONTRIBUTING
-last-refreshed: 2026-05-29
+last-refreshed: 2026-06-01
 generated-by: doc-refresh skill
 -->
 
@@ -76,5 +76,6 @@ generated-by: doc-refresh skill
 | `test/health.test.js` | Health aggregation logic |
 | `test/git.test.js` | Origin URL parsing (HTTPS, SSH, subgroups, `.git` suffix) |
 | `test/claude.test.js` | Claude command builder and session-history detection |
+| `test/server.test.js` | HTTP routes — security headers, CSRF enforcement, env editor, session reload, system resources |
 
 Add a test file under `test/` for every new module. Use the built-in `node:test` runner — no extra dependencies.

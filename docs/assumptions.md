@@ -46,8 +46,8 @@ Non-obvious decisions made during ccfleet implementation. Each entry: assumption
 
 ---
 
-- **Assumption:** `claude` is launched inside tmux with `--dangerously-skip-permissions --continue --model claude-sonnet-4-6 --effort medium --remote-control MacMini-<originProjectName>`. `--continue` is only included when prior session history exists for the project (a non-empty `~/.claude/projects/<encoded-path>/` directory containing at least one `.jsonl`); otherwise it is omitted because `--continue` against a fresh project causes claude to exit at startup.
-- **Why:** The user runs claude on a remote always-on host and wants every fleet-launched session to attach to Anthropic's Remote Control surface under a stable, host-prefixed identifier. The identifier is derived from the git `origin` URL (e.g. `https://github.com/RealDougEubanks/ClaudeMarketplace` → `MacMini-ClaudeMarketplace`) so it is stable across directory renames. If no `origin` remote is configured, the directory basename is used as a fallback. `--dangerously-skip-permissions` is the user's standing preference for this host.
+- **Assumption:** `claude` is launched inside tmux with `--dangerously-skip-permissions --continue --model claude-sonnet-4-6 --effort medium --remote-control <prefix>-<originProjectName>` where `<prefix>` is `REMOTE_CONTROL_PREFIX` if set, otherwise `os.hostname()`. `--continue` is only included when prior session history exists for the project (a non-empty `~/.claude/projects/<encoded-path>/` directory containing at least one `.jsonl`); otherwise it is omitted because `--continue` against a fresh project causes claude to exit at startup.
+- **Why:** The user runs claude on a remote always-on host and wants every fleet-launched session to attach to Anthropic's Remote Control surface under a stable, host-prefixed identifier. The identifier is derived from the git `origin` URL (e.g. `https://github.com/RealDougEubanks/ClaudeMarketplace` → `<hostname>-ClaudeMarketplace`) so it is stable across directory renames. If no `origin` remote is configured, the directory basename is used as a fallback. `--dangerously-skip-permissions` is the user's standing preference for this host.
 - **How to apply:** When extending session creation logic, keep the existence check before adding `--continue`, validate the derived remote-control name against `[a-zA-Z0-9._-]+` before passing it as an argument, and never interpolate the origin URL itself into a shell command.
 - **Recorded by:** Claude (Opus 4.7)
 - **Date:** 2026-05-29
@@ -69,6 +69,22 @@ Non-obvious decisions made during ccfleet implementation. Each entry: assumption
 
 ---
 
-- **Assumption:** `pm2` is kept as a `devDependency` (not removed entirely) despite having known CVEs in every current release (GHSA-58qx-3vcg-4xpx in @7, GHSA-x5gf-qvw8-r2rm in @6). The CVEs affect the pm2 daemon's WebSocket interface and are exploitable only if the pm2 daemon is exposed. ccfleet uses launchd (macOS) and systemd (Linux) as its production service managers; pm2 is retained only to provide `npm run pm2:*` convenience scripts for developers who prefer it during local development. It is never installed or started in production. The risk is accepted for the devDependency surface only.
+- **Assumption:** `pm2` was removed entirely from the project (previously a `devDependency`). ccfleet uses launchd (macOS) and systemd (Linux) exclusively as its service managers. There are no npm scripts wrapping pm2.
 - **Recorded by:** Claude (Sonnet 4.6)
-- **Date:** 2026-05-29
+- **Date:** 2026-06-01
+
+---
+
+- **Assumption:** The `.env` editor exposes project environment files (which may contain API keys and secrets) via the web UI. The global JSON body limit was raised to `64kb` to accommodate typical `.env` files; individual routes still enforce tighter limits via Zod schemas (`content` capped at 65536 chars). Writes are atomic: a temp file with a random hex suffix and mode `0600` is written and then renamed over the target — no partial content is ever readable. The editor automatically appends `.env` to the project's `.gitignore` if not already covered.
+- **Why:** A `.env` editor that writes insecure temp files or lacks a `.gitignore` guard could silently commit secrets if the user runs `git add .` in the project directory. The body limit increase is safe because all routes enforce per-field Zod caps that are tighter than the global limit.
+- **How to apply:** Any future route that writes sensitive files should follow the same atomic-write pattern (`randomBytes` suffix, mode `0600`, unlink on failure) and should include a `.gitignore` guard where applicable.
+- **Recorded by:** Claude (Sonnet 4.6)
+- **Date:** 2026-06-01
+
+---
+
+- **Assumption:** Session reload (`POST /api/projects/:name/sessions/reload`) uses `tmux respawn-pane -k` to kill the running `claude` process and immediately relaunch it with `--continue` in the same pane. This is a process restart, not a true in-place env reload (Linux's `/proc/PID/environ` is write-once at `execve` time). The conversation history stored in the `.jsonl` file is untouched; from the user's perspective the session is continuous.
+- **Why:** Environment variables are set at process startup and cannot be injected into a running process without OS-specific and fragile tricks. `respawn-pane -k` is the cleanest available mechanism: it reuses the same tmux window and working directory, so the user sees no visible session disruption.
+- **How to apply:** `respawn-pane` with the `-k` flag requires tmux ≥ 3.0. If tmux version detection is ever added to the health check, include a version gate for this feature.
+- **Recorded by:** Claude (Sonnet 4.6)
+- **Date:** 2026-06-01

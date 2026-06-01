@@ -1,6 +1,6 @@
 <!--
 doc: README
-last-refreshed: 2026-05-29
+last-refreshed: 2026-06-01
 generated-by: doc-refresh skill
 -->
 
@@ -57,7 +57,7 @@ graph LR
 |------|---------|
 | `server.js` | Express app, all HTTP routes |
 | `lib/projects.js` | Scans `GIT_ROOT` for git repositories |
-| `lib/tmux.js` | Wraps `tmux list-sessions`, `new-session`, `kill-session` |
+| `lib/tmux.js` | Wraps `tmux list-sessions`, `new-session`, `kill-session`, `respawn-pane` |
 | `lib/git.js` | Extracts the project name from `git remote get-url origin` |
 | `lib/claude.js` | Builds the `claude` launch command and checks for prior session history |
 | `lib/health.js` | Synthetic probes for `tmux`, `claude`, and `GIT_ROOT` |
@@ -90,7 +90,7 @@ See [`docs/ENV_VARS.md`](docs/ENV_VARS.md) for the full reference.
 | `CLAUDE_MODEL` | no | Model passed to `--model` (default `claude-sonnet-4-6`) |
 | `CLAUDE_EFFORT` | no | Effort level: `low`, `medium`, `high`, or `highest` (default `medium`) |
 | `CLAUDE_SKIP_PERMISSIONS` | no | Set to `true` to pass `--dangerously-skip-permissions` — **disables all file permission checks**. Default `false`. See warning below. |
-| `REMOTE_CONTROL_PREFIX` | no | Prefix for `--remote-control` identifiers (default `MacMini`) |
+| `REMOTE_CONTROL_PREFIX` | no | Prefix for `--remote-control` identifiers (default: machine hostname via `os.hostname()`) |
 | `TTYD_URL` | no | URL of optional `ttyd` terminal |
 | `REMOTE_CONTROL_URL` | no | Override for the Open button (default `https://claude.ai/code`) |
 | `LOG_LEVEL` | no | `pino` log level (default `info`) |

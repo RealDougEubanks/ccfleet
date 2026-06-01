@@ -1,6 +1,6 @@
 <!--
 doc: SECURITY
-last-refreshed: 2026-05-29
+last-refreshed: 2026-06-01
 generated-by: doc-refresh skill
 -->
 
@@ -38,6 +38,7 @@ ccfleet has no mandatory built-in authentication. Access control is layered at t
 | Data | Where it lives | Protection |
 |------|----------------|------------|
 | Optional basic auth credentials | `.env` file on the host | File-system permissions, `.gitignore` |
+| Project `.env` file contents | Per-project `.env` files in `GIT_ROOT` | Read/write only via authenticated API; written with mode `0600`; guarded against unbounded reads |
 | Project directory listing | Returned by `GET /api/projects` | Behind Cloudflare Access (and optionally basic auth) |
 | tmux session names | Returned by `GET /api/sessions` | Behind Cloudflare Access (and optionally basic auth) |
 | Logs | launchd stdout files | Local-only, no PII logged |
@@ -53,7 +54,7 @@ ccfleet does **not** handle:
 |---------|----------------|
 | Optional HTTP Basic auth on API and static routes | `lib/auth.js`, `server.js` |
 | Rate limiting (120 req/min per IP) | `server.js` |
-| Request body size cap (`1kb`) | `server.js` |
+| Request body size cap (`64kb` global; per-route Zod schema limits tighter) | `server.js` |
 | Strict input validation (regex + `zod`) | `lib/sanitize.js`, `server.js` |
 | Path traversal rejection in project names | `lib/sanitize.js` |
 | `execFile` only, never `exec` (no shell interpolation for tmux/git args) | `lib/tmux.js`, `lib/git.js` |
@@ -64,6 +65,8 @@ ccfleet does **not** handle:
 | Unauthenticated health endpoints (no secrets disclosed) | `server.js` |
 | `x-powered-by` header disabled | `server.js` |
 | Atomic, mode-`0600` write of `~/.claude.json` when pre-trusting a project | `lib/claude.js` |
+| `.env` editor: Zod schema + 64 KB read cap + null-byte strip + CRLF normalisation + atomic mode-`0600` write + `.gitignore` guard | `server.js` |
+| Session reload: `respawn-pane -k` reuses validated session name — no shell interpolation of user data | `lib/tmux.js` |
 
 ## Network Exposure
 

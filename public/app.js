@@ -305,15 +305,22 @@ el.envReload.addEventListener('click', async () => {
       method: 'PUT',
       body: JSON.stringify({ content: el.envContent.value }),
     });
+  } catch (saveErr) {
+    showToast(`Save failed: ${saveErr.message}`, 'error');
+    el.envSave.disabled = false;
+    el.envReload.disabled = false;
+    return;
+  }
+  // .env saved — now reload the session. Close the dialog regardless; the
+  // save succeeded and re-enabling the form would let the user overwrite again.
+  el.envDialog.close();
+  try {
     await api(`/api/projects/${encodeURIComponent(envEditorProject)}/sessions/reload`, {
       method: 'POST',
     });
     showToast(`Saved and reloaded ${envEditorProject}`);
-    el.envDialog.close();
-  } catch (err) {
-    showToast(err.message, 'error');
-    el.envSave.disabled = false;
-    el.envReload.disabled = false;
+  } catch (reloadErr) {
+    showToast(`.env saved but reload failed: ${reloadErr.message}`, 'error');
   }
 });
 

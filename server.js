@@ -284,16 +284,20 @@ app.get('/api/status/:session_name', async (req, res, next) => {
 
 // ---- project .env editor ----
 
+const GITIGNORE_MAX_BYTES = 1024 * 1024; // 1 MB — a larger .gitignore is almost certainly not a real one
+
 async function ensureEnvIgnored(gitignorePath) {
   let existing = '';
   try {
+    const stat = await fs.stat(gitignorePath);
+    if (stat.size > GITIGNORE_MAX_BYTES) return; // too large to be a real .gitignore; skip safely
     existing = await fs.readFile(gitignorePath, 'utf8');
   } catch (err) {
     if (err.code !== 'ENOENT') throw err;
   }
-  // Check whether any line already matches .env (exact or glob like /.env or *.env).
+  // Check whether any line already covers .env (exact, prefixed, or glob).
   const lines = existing.split('\n');
-  const alreadyCovered = lines.some((l) => /^\/?.env$/.test(l.trim()));
+  const alreadyCovered = lines.some((l) => /^(\*\.env|\/?.env)$/.test(l.trim()));
   if (alreadyCovered) return;
   const separator = existing.length > 0 && !existing.endsWith('\n') ? '\n' : '';
   await fs.appendFile(gitignorePath, `${separator}.env\n`);
