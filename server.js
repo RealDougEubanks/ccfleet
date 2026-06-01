@@ -96,7 +96,8 @@ app.use(pinoHttp({ logger, customLogLevel: (req, res, err) => {
   return 'info';
 }}));
 
-app.use(express.json({ limit: '1kb' }));
+// 64kb accommodates .env files; all routes enforce tighter limits via Zod schemas.
+app.use(express.json({ limit: '64kb' }));
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -166,6 +167,10 @@ function requireJson(req, res, next) {
 
 const createSessionSchema = z.object({
   project_name: z.string().min(1).max(64),
+}).strict();
+
+const updateEnvSchema = z.object({
+  content: z.string().max(65536),
 }).strict();
 
 // ---- API routes ----
@@ -271,6 +276,76 @@ app.get('/api/status/:session_name', async (req, res, next) => {
       current_command: session.current_command,
       status: session.status,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- project .env editor ----
+
+async function ensureEnvIgnored(gitignorePath) {
+  let existing = '';
+  try {
+    existing = await fs.readFile(gitignorePath, 'utf8');
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  // Check whether any line already matches .env (exact or glob like /.env or *.env).
+  const lines = existing.split('\n');
+  const alreadyCovered = lines.some((l) => /^\/?.env$/.test(l.trim()));
+  if (alreadyCovered) return;
+  const separator = existing.length > 0 && !existing.endsWith('\n') ? '\n' : '';
+  await fs.appendFile(gitignorePath, `${separator}.env\n`);
+}
+
+app.get('/api/projects/:project_name/env', async (req, res, next) => {
+  try {
+    const { project_name: projectName } = req.params;
+    if (!isValidProjectName(projectName)) {
+      return res.status(400).json({ error: 'invalid project name' });
+    }
+    if (!(await projectExists(getGitRoot(), projectName))) {
+      return res.status(404).json({ error: 'project not found' });
+    }
+    const envPath = path.join(getGitRoot(), projectName, '.env');
+    try {
+      const content = await fs.readFile(envPath, 'utf8');
+      return res.json({ content, exists: true });
+    } catch (err) {
+      if (err.code === 'ENOENT') return res.json({ content: '', exists: false });
+      throw err;
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.put('/api/projects/:project_name/env', requireJson, async (req, res, next) => {
+  try {
+    const { project_name: projectName } = req.params;
+    if (!isValidProjectName(projectName)) {
+      return res.status(400).json({ error: 'invalid project name' });
+    }
+    if (!(await projectExists(getGitRoot(), projectName))) {
+      return res.status(404).json({ error: 'project not found' });
+    }
+    const parsed = updateEnvSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'invalid request body' });
+    }
+    // Normalize line endings — editors on Windows may submit CRLF.
+    const content = parsed.data.content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const projectDir = path.join(getGitRoot(), projectName);
+    const envPath = path.join(projectDir, '.env');
+    const tmp = `${envPath}.ccfleet.${process.pid}.tmp`;
+    await fs.writeFile(tmp, content, { mode: 0o600 });
+    await fs.rename(tmp, envPath);
+
+    // Ensure .env is in the project's .gitignore so it isn't accidentally committed.
+    await ensureEnvIgnored(path.join(projectDir, '.gitignore'));
+
+    logger.info({ event: 'env_updated', project: projectName }, '.env updated');
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

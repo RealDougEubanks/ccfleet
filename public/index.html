@@ -55,6 +55,16 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
+    <dialog id="env-dialog">
+      <h3 id="env-dialog-title" class="env-dialog-title"></h3>
+      <p class="env-note">Changes take effect when the session is next started or restarted.</p>
+      <textarea id="env-content" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+      <menu>
+        <button id="env-cancel" type="button">Cancel</button>
+        <button id="env-save" type="button" class="primary">Save</button>
+      </menu>
+    </dialog>
+
     <dialog id="confirm-dialog">
       <form method="dialog">
         <p id="confirm-text">Kill this session?</p>
