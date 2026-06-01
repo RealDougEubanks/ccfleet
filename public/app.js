@@ -27,6 +27,7 @@ const el = {
   envDialogTitle: document.getElementById('env-dialog-title'),
   envContent: document.getElementById('env-content'),
   envSave: document.getElementById('env-save'),
+  envReload: document.getElementById('env-reload'),
   envCancel: document.getElementById('env-cancel'),
   statCpu: document.getElementById('stat-cpu'),
   statMem: document.getElementById('stat-mem'),
@@ -259,12 +260,15 @@ async function openEnvEditor(projectName) {
   el.envContent.value = '';
   el.envContent.disabled = true;
   el.envSave.disabled = true;
+  el.envReload.disabled = true;
+  el.envReload.hidden = !state.sessions.some((s) => s.project_name === projectName);
   el.envDialog.showModal();
   try {
     const data = await api(`/api/projects/${encodeURIComponent(projectName)}/env`);
     el.envContent.value = data.content;
     el.envContent.disabled = false;
     el.envSave.disabled = false;
+    el.envReload.disabled = false;
   } catch (err) {
     showToast(err.message, 'error');
     el.envDialog.close();
@@ -277,6 +281,7 @@ el.envDialog.addEventListener('close', () => { envEditorProject = null; });
 el.envSave.addEventListener('click', async () => {
   if (!envEditorProject) return;
   el.envSave.disabled = true;
+  el.envReload.disabled = true;
   try {
     await api(`/api/projects/${encodeURIComponent(envEditorProject)}/env`, {
       method: 'PUT',
@@ -287,6 +292,28 @@ el.envSave.addEventListener('click', async () => {
   } catch (err) {
     showToast(err.message, 'error');
     el.envSave.disabled = false;
+    el.envReload.disabled = false;
+  }
+});
+
+el.envReload.addEventListener('click', async () => {
+  if (!envEditorProject) return;
+  el.envSave.disabled = true;
+  el.envReload.disabled = true;
+  try {
+    await api(`/api/projects/${encodeURIComponent(envEditorProject)}/env`, {
+      method: 'PUT',
+      body: JSON.stringify({ content: el.envContent.value }),
+    });
+    await api(`/api/projects/${encodeURIComponent(envEditorProject)}/sessions/reload`, {
+      method: 'POST',
+    });
+    showToast(`Saved and reloaded ${envEditorProject}`);
+    el.envDialog.close();
+  } catch (err) {
+    showToast(err.message, 'error');
+    el.envSave.disabled = false;
+    el.envReload.disabled = false;
   }
 });
 

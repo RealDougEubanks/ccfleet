@@ -21,7 +21,7 @@ const { buildAuth } = require('./lib/auth');
 const { listProjects, projectExists } = require('./lib/projects');
 const tmux = require('./lib/tmux');
 const health = require('./lib/health');
-const { isValidSessionName, isValidProjectName } = require('./lib/sanitize');
+const { isValidSessionName, isValidProjectName, toSessionName } = require('./lib/sanitize');
 
 const PORT = Number(process.env.PORT || 3001);
 const REMOTE_NAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -360,6 +360,25 @@ app.put('/api/projects/:project_name/env', requireJson, async (req, res, next) =
     logger.info({ event: 'env_updated', project: projectName }, '.env updated');
     res.json({ ok: true });
   } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/projects/:project_name/sessions/reload', requireJson, async (req, res, next) => {
+  try {
+    const { project_name: projectName } = req.params;
+    if (!isValidProjectName(projectName)) {
+      return res.status(400).json({ error: 'invalid project name' });
+    }
+    if (!(await projectExists(getGitRoot(), projectName))) {
+      return res.status(404).json({ error: 'project not found' });
+    }
+    const sessionName = toSessionName(projectName);
+    await tmux.reloadSession(sessionName, getGitRoot(), projectName);
+    logger.info({ event: 'session_reloaded', project: projectName }, 'session reloaded to apply updated env');
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.code === 'SESSION_NOT_FOUND') return res.status(404).json({ error: 'no active session for this project' });
     next(err);
   }
 });

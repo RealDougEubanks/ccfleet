@@ -279,6 +279,38 @@ test('PUT /api/projects/:name/env returns 415 without JSON content-type', async 
   assert.equal(res.status, 415);
 });
 
+// ---- session reload ---------------------------------------------------------
+
+test('POST /api/projects/:name/sessions/reload with invalid name returns 400', async () => {
+  const res = await post('/api/projects/bad%2Fname/sessions/reload', {});
+  assert.equal(res.status, 400);
+});
+
+test('POST /api/projects/:name/sessions/reload for nonexistent project returns 404', async () => {
+  const res = await post('/api/projects/no-such-project/sessions/reload', {});
+  assert.equal(res.status, 404);
+});
+
+test('POST /api/projects/:name/sessions/reload without JSON content-type returns 415', async () => {
+  const res = await fetch(`${base}/api/projects/anything/sessions/reload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: '',
+  });
+  assert.equal(res.status, 415);
+});
+
+test('POST /api/projects/:name/sessions/reload for project with no active session returns 404', async () => {
+  const projectDir = path.join(tmpGitRoot, 'reload-test');
+  await fs.mkdir(path.join(projectDir, '.git'), { recursive: true });
+  try {
+    const res = await post('/api/projects/reload-test/sessions/reload', {});
+    assert.equal(res.status, 404);
+  } finally {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  }
+});
+
 // ---- system resources -------------------------------------------------------
 
 test('GET /api/system/resources returns cpu, mem, disk with pct fields', async () => {
