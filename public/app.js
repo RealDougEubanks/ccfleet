@@ -272,6 +272,7 @@ async function openEnvEditor(projectName) {
 }
 
 el.envCancel.addEventListener('click', () => el.envDialog.close());
+el.envDialog.addEventListener('close', () => { envEditorProject = null; });
 
 el.envSave.addEventListener('click', async () => {
   if (!envEditorProject) return;

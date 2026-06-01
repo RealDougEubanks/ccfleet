@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const { randomBytes } = require('crypto');
 const fs = require('fs/promises');
 const os = require('os');
 
@@ -309,6 +310,10 @@ app.get('/api/projects/:project_name/env', async (req, res, next) => {
     }
     const envPath = path.join(getGitRoot(), projectName, '.env');
     try {
+      const stat = await fs.stat(envPath);
+      if (stat.size > 65536) {
+        return res.status(422).json({ error: '.env file exceeds maximum size' });
+      }
       const content = await fs.readFile(envPath, 'utf8');
       return res.json({ content, exists: true });
     } catch (err) {
@@ -333,13 +338,21 @@ app.put('/api/projects/:project_name/env', requireJson, async (req, res, next) =
     if (!parsed.success) {
       return res.status(400).json({ error: 'invalid request body' });
     }
-    // Normalize line endings — editors on Windows may submit CRLF.
-    const content = parsed.data.content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    // Normalize line endings and strip null bytes.
+    const content = parsed.data.content
+      .replace(/\x00/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n');
     const projectDir = path.join(getGitRoot(), projectName);
     const envPath = path.join(projectDir, '.env');
-    const tmp = `${envPath}.ccfleet.${process.pid}.tmp`;
-    await fs.writeFile(tmp, content, { mode: 0o600 });
-    await fs.rename(tmp, envPath);
+    const tmp = `${envPath}.ccfleet.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
+    try {
+      await fs.writeFile(tmp, content, { mode: 0o600 });
+      await fs.rename(tmp, envPath);
+    } catch (err) {
+      await fs.unlink(tmp).catch(() => {});
+      throw err;
+    }
 
     // Ensure .env is in the project's .gitignore so it isn't accidentally committed.
     await ensureEnvIgnored(path.join(projectDir, '.gitignore'));
