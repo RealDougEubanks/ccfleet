@@ -198,8 +198,14 @@ app.get('/api/sessions', async (_req, res, next) => {
       tmux.listSessions(),
       listProjects(getGitRoot()),
     ]);
-    const knownSessionNames = new Set(projects.map((p) => p.session_name));
-    const sessions = allSessions.filter((s) => knownSessionNames.has(s.session_name));
+    // Index by session_name so we can restore the real directory name.
+    // listSessions() sets project_name = session_name (dots replaced with
+    // underscores), which breaks .env lookups for directories like
+    // PropagateHosting.com whose session name is PropagateHosting_com.
+    const projectBySession = new Map(projects.map((p) => [p.session_name, p]));
+    const sessions = allSessions
+      .filter((s) => projectBySession.has(s.session_name))
+      .map((s) => ({ ...s, project_name: projectBySession.get(s.session_name).name }));
     res.json({ sessions });
   } catch (err) {
     next(err);

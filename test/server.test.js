@@ -117,6 +117,32 @@ test('GET /api/projects returns entry when git dir exists', async () => {
   }
 });
 
+// ---- sessions ---------------------------------------------------------------
+
+test('GET /api/sessions returns empty array when no tmux sessions exist', async () => {
+  const res = await get('/api/sessions');
+  assert.equal(res.status, 200);
+  const { sessions } = await res.json();
+  assert.ok(Array.isArray(sessions));
+});
+
+test('GET /api/projects session_name for dotted directory uses underscores', async () => {
+  // Regression guard: session_name must use toSessionName() so the .env
+  // button on an active session card can match back to the real directory.
+  const projectDir = path.join(tmpGitRoot, 'propagate.com');
+  await fs.mkdir(path.join(projectDir, '.git'), { recursive: true });
+  try {
+    const res = await get('/api/projects');
+    assert.equal(res.status, 200);
+    const { projects } = await res.json();
+    const p = projects.find((x) => x.name === 'propagate.com');
+    assert.ok(p, 'project not found in list');
+    assert.equal(p.session_name, 'propagate_com', 'session_name should replace dots with underscores');
+  } finally {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  }
+});
+
 // ---- sessions (validation only — no tmux required) --------------------------
 
 test('POST /api/sessions with no body returns 400', async () => {
