@@ -350,7 +350,7 @@ app.put('/api/projects/:project_name/env', requireJson, async (req, res, next) =
     }
     // Normalize line endings and strip null bytes.
     const content = parsed.data.content
-      .replace(/\x00/g, '')
+      .split('\x00').join('')
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n');
     const projectDir = path.join(getGitRoot(), projectName);
