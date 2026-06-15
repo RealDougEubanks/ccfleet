@@ -130,6 +130,24 @@ test('encodeProjectPath converts slashes to dashes', () => {
   assert.equal(encodeProjectPath('/a/b/c'), '-a-b-c');
 });
 
+test('encodeProjectPath converts dots to dashes (matches claude CLI)', () => {
+  assert.equal(
+    encodeProjectPath('/Users/me/git/PropagateHosting.com'),
+    '-Users-me-git-PropagateHosting-com',
+  );
+});
+
+test('hasExistingSession finds history for dotted project names', async (t) => {
+  const home = await fakeHome(t);
+  const projectDir = '/tmp/foo.com';
+  const encoded = '-tmp-foo-com';
+  const histDir = path.join(home, '.claude', 'projects', encoded);
+  await fs.mkdir(histDir, { recursive: true });
+  await fs.writeFile(path.join(histDir, 'abc.jsonl'), '{}\n');
+
+  assert.equal(await hasExistingSession(projectDir), true);
+});
+
 test('hasExistingSession is false when project history does not exist', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ccfleet-claude-'));
   try {
