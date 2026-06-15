@@ -1,5 +1,7 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
+# Pull patched alpine packages (openssl, etc.) on top of the base image.
+RUN apk -U upgrade --no-cache
 # Update npm to get patched bundled deps (cross-spawn, minimatch, tar)
 RUN npm install -g npm@latest --ignore-scripts
 COPY package.json package-lock.json ./
@@ -7,6 +9,8 @@ RUN npm ci --omit=dev --ignore-scripts
 
 FROM node:20-alpine
 WORKDIR /app
+# Pull patched alpine packages on top of the base image.
+RUN apk -U upgrade --no-cache
 # Update npm for the same reason — its bundled deps have known CVEs in older versions
 RUN npm install -g npm@latest --ignore-scripts
 
