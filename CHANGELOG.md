@@ -3,6 +3,34 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.4] — 2026-06-15
+
+### Fixed
+- **Session history did not resume for projects with dots in their directory name** — `encodeProjectPath` translated only `/` to `-`, but the Claude CLI also translates `.` to `-` when bucketing project history under `~/.claude/projects/`. Projects such as `PropagateHosting.com` never matched their on-disk history directory, so `hasExistingSession` always returned `false`, `--continue` was never passed, and every session launched fresh. Pins in the Claude desktop app pointed at orphaned conversations, producing the "spins when prompted" symptom. Encoding now mirrors the CLI: both `/` and `.` map to `-`. (`lib/claude.js`, `test/claude.test.js`)
+- **Dockerfile pulls patched alpine packages at build time** — `apk -U upgrade --no-cache` runs in both build stages so CVE-2026-45447 (openssl heap use-after-free in `PKCS7_verify`) is patched on top of the `node:20-alpine` base, which still ships `libcrypto3`/`libssl3` 3.5.6-r0. (`Dockerfile`)
+
+## [0.9.3] — 2026-06-01
+
+### Added
+- **.env editor** — read, edit, and save `.env` files for each project directory directly from the dashboard. Save-and-reload restarts the active session in place via `tmux respawn-pane -k` so new variables take effect without losing the tmux session. (`server.js`, `lib/projects.js`, `public/app.js`, `public/index.html`)
+- **Docker support** — multi-stage `Dockerfile`, `docker-compose.yml`, and `.dockerignore`. Container reuses the built-in `node:20-alpine` `node` user (UID 1000) so it matches the host's tmux socket owner. `TMUX_TMPDIR=/tmp/tmux-1000` and `TRUST_PROXY=172.16.0.0/12` are documented for container deployments.
+- **CI pipeline** — GitHub Actions workflow runs tests, ESLint, `npm audit`, Trivy container scan, and a Docker build on every push/PR. All third-party actions pinned to commit SHAs.
+- **ESLint** — flat config with `@eslint/js` recommended rules and project-specific overrides. `npm run lint` enforces style locally and in CI.
+
+### Fixed
+- **HIGH — `javascript:` URI injection via `window.open`** — `REMOTE_CONTROL_URL` and `TTYD_URL` are now validated against `^https?://` at the API boundary and again in the frontend before every `window.open` call. (`server.js`, `public/app.js`)
+- **MODERATE — ttyd credential leak in process environment** — `bin/start-ttyd.sh` now unsets `BASIC_AUTH_USER` and `BASIC_AUTH_PASS` before `exec`, so they are not visible in the ttyd process environment.
+- **MODERATE — `trust proxy` misconfigured under Docker** — `TRUST_PROXY` env var (default: `loopback`) controls Express's trust setting so `req.ip` and rate limiting work correctly behind a reverse proxy. Documented Docker (`172.16.0.0/12`) and reverse-proxy examples.
+- **MODERATE — Docker UID/TMUX_TMPDIR mismatch** — image pins to the existing `node` user (UID 1000) and `TMUX_TMPDIR` is set so the host's tmux socket bind-mount works.
+- **.env editor hardening** — temp file written with `mode: 0o600` and a random suffix, then atomically renamed over the target; null bytes stripped; 64KB size cap; filename validated against an allow-list to prevent path traversal.
+- **`.env` button for projects with dots in their name** — frontend now URL-encodes the project name segment so `PropagateHosting.com` no longer breaks the route.
+- **`listSessions` handles tmux socket missing in CI** — returns `[]` instead of throwing when tmux is not installed or no server is running.
+- **Restart confirmation dialog warns about service-manager dependency** — clarifies that ccfleet only comes back automatically if launchd or systemd is supervising it.
+
+### Changed
+- **`SECURITY.md`** documents the Docker tmux socket bind-mount risk and mitigations.
+- **`server.js`** elevates the "basic auth disabled" startup message from `info` to `warn` so it surfaces in monitoring dashboards.
+
 ## [0.9.2] — 2026-05-30
 
 ### Fixed
