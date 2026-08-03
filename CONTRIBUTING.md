@@ -15,6 +15,24 @@ generated-by: doc-refresh skill
 
 > **SECURITY:** Never commit secrets, API keys, tokens, or credentials. `.env` is git-ignored — keep it that way. If you accidentally commit a secret, rotate it immediately and force-push the cleanup (after coordinating with the maintainer).
 
+## One-Time Setup
+
+Install the git hooks after cloning:
+
+```bash
+npm install
+scripts/install-hooks.sh
+```
+
+This points `core.hooksPath` at [`.githooks/`](.githooks), so the hooks are version-controlled and everyone gets fixes on their next pull. No extra dependencies — the hooks are plain bash.
+
+| Hook | Runs | Checks |
+|------|------|--------|
+| `pre-commit` | Every commit (~3s) | Staged secrets and `.env` files, conflict markers, files over 1MB, `console.log` in production paths, `// TODO`, `.only()` in tests, `package.json`/lockfile sync, shellcheck, ESLint on staged files, full test suite |
+| `pre-push` | Every push | Direct-push-to-`main` block, full lint, full test suite |
+
+> **SECURITY:** The hooks are a fast feedback loop, not the enforcement boundary. Anyone can bypass them with `--no-verify`, so CI on the pull request remains the authority. Committed secrets are the one thing that cannot be undone by a later fix — the pre-commit scan exists to stop those reaching a branch at all, and GitHub push protection backs it up server-side.
+
 ## Workflow
 
 1. Branch from `main`:
@@ -23,7 +41,7 @@ generated-by: doc-refresh skill
    git checkout -b feature/short-description
    ```
 2. Make your changes.
-3. Run tests and lint:
+3. The pre-commit hook runs tests and lint automatically. To run them by hand:
    ```bash
    npm test
    npm run lint
@@ -39,7 +57,7 @@ generated-by: doc-refresh skill
 
 ## PR Checklist
 
-- [ ] `npm test` passes (80/80)
+- [ ] `npm test` passes (82/82)
 - [ ] `npm run lint` passes (0 errors)
 - [ ] No new secrets or hardcoded credentials
 - [ ] Input handlers (any new HTTP route, any new shell-out) have unit tests for valid, invalid, oversized, and exception paths

@@ -88,3 +88,27 @@ Non-obvious decisions made during ccfleet implementation. Each entry: assumption
 - **How to apply:** `respawn-pane` with the `-k` flag requires tmux ≥ 3.0. If tmux version detection is ever added to the health check, include a version gate for this feature.
 - **Recorded by:** Claude (Sonnet 4.6)
 - **Date:** 2026-06-01
+
+---
+
+- **Assumption:** CI runs on pull requests into `main` and on `main` itself, but not on pushes to feature branches. Lint and tests are enforced locally by the hooks in `.githooks/`, installed via `scripts/install-hooks.sh`.
+- **Why:** The previous configuration triggered on `push: ["**"]` *and* `pull_request`, so every branch push ran the full matrix twice — once for the push, once for the PR — then a third time on `main` after merge. Five separate jobs each performed their own checkout and `npm ci` for roughly three seconds of actual work. Feature-branch pushes are covered locally by the pre-commit and pre-push hooks; the PR run remains the enforcement boundary because hooks can be bypassed with `--no-verify`.
+- **How to apply:** Keep the local hooks and the CI `verify` job checking the same things (`npm run lint`, `npm test`). If a check is added to one, add it to the other, or the fast local signal stops predicting the authoritative one.
+- **Recorded by:** Claude (Opus 4.7)
+- **Date:** 2026-08-03
+
+---
+
+- **Assumption:** Vulnerability scanning (`npm audit`, Trivy filesystem and image scans) runs on a weekly schedule in `.github/workflows/security.yml`, not on every commit. It also runs on pull requests that touch `package.json`, `package-lock.json`, or the Docker build inputs.
+- **Why:** CVEs are published on their own schedule, not on the project's commit schedule. Per-commit scanning produced both false urgency and false confidence: an unrelated PR went red the morning CVE-2026-45447 was published against the base image's OpenSSL (see the 0.9.4 release notes), while a week with no commits received no scanning at all. A scheduled scan catches a new CVE within a week whether or not anyone is committing, and a dependency-touching PR is still scanned immediately.
+- **How to apply:** To scan daily instead of weekly, change the cron in `security.yml` to `"0 6 * * *"`. Do not add vulnerability scanning back into `ci.yml` — a CVE published this morning is not a defect in the pull request that happens to be open.
+- **Recorded by:** Claude (Opus 4.7)
+- **Date:** 2026-08-03
+
+---
+
+- **Assumption:** The Docker image is built on `node:22-alpine` and no longer runs `npm install -g npm@latest`. CI and the security workflow also test on Node 22.
+- **Why:** Node 20 reached end of life in April 2026. The unpinned global npm upgrade — originally added to pick up patched bundled dependencies — broke the image entirely the day npm 12 shipped, because npm 12 requires Node >=22 and refuses to install on Node 20. Nothing in the repository changed; the image rotted on its own and no one noticed, because image builds only ran on pull requests that happened to be open. The npm bundled with Node 22 is current, so the hand-rolled upgrade is unnecessary.
+- **How to apply:** Do not reintroduce `npm install -g npm@latest` or any other unpinned `@latest` install in a Dockerfile — it makes the build non-reproducible and turns an upstream release into an outage. If a bundled dependency needs patching, pin the exact version and let the Trivy image scan in `security.yml` confirm it.
+- **Recorded by:** Claude (Opus 4.7)
+- **Date:** 2026-08-03

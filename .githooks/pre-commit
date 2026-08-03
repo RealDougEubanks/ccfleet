@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+# ccfleet pre-commit hook — fast local quality gate (target: under 5 seconds).
+#
+# This gives fast feedback; it is NOT the enforcement boundary. Hooks are local
+# and any commit can bypass them with --no-verify, so CI on the PR remains the
+# authority. Everything here is either instant or catches a mistake that is
+# expensive to undo once pushed (a committed secret cannot be un-published).
+#
+# Install:   scripts/install-hooks.sh
+# Bypass:    git commit --no-verify
+set -uo pipefail
+
+fail=0
+note() { printf '  \033[31m✗\033[0m %s\n' "$1"; fail=1; }
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
+
+echo "pre-commit checks:"
+
+# Staged files, excluding deletions — a deleted file cannot violate anything.
+# Built with a read loop rather than `mapfile`, which is bash 4+; stock macOS
+# still ships bash 3.2 and the hook has to work there.
+staged=()
+staged_js=()
+staged_sh=()
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  staged+=("$f")
+  case "$f" in
+    *.js) staged_js+=("$f") ;;
+    *.sh) staged_sh+=("$f") ;;
+  esac
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [ ${#staged[@]} -eq 0 ]; then
+  echo "  nothing staged"
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# 1. Never commit directly to main (CLAUDE.md git hygiene rule)
+# ---------------------------------------------------------------------------
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [ "$branch" = "main" ]; then
+  note "committing directly to main — branch first (feature/, fix/, chore/)"
+else
+  ok "on branch $branch"
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Secrets and env files
+# ccfleet edits .env files for a living, so a stray staged .env is a real risk.
+# ---------------------------------------------------------------------------
+secret_hit=0
+for f in "${staged[@]}"; do
+  case "$(basename "$f")" in
+    .env|.env.*)
+      [ "$(basename "$f")" = ".env.example" ] && continue
+      note "staged env file: $f — add it to .gitignore"
+      secret_hit=1
+      ;;
+    *.pem|*.key|id_rsa|id_ed25519|*.p12|*.pfx)
+      note "staged credential file: $f"
+      secret_hit=1
+      ;;
+  esac
+done
+
+# Content scan of the staged diff only — not the whole tree, so this stays fast.
+# Patterns are deliberately narrow to avoid crying wolf on ordinary code.
+secret_patterns='(sk-ant-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,})'
+if git diff --cached -U0 -- "${staged[@]}" | grep -nEq "^\+.*$secret_patterns"; then
+  note "possible secret in staged diff:"
+  git diff --cached -U0 -- "${staged[@]}" \
+    | grep -nE "^\+.*$secret_patterns" \
+    | sed 's/^/      /' | cut -c1-120 | head -5
+  secret_hit=1
+fi
+[ $secret_hit -eq 0 ] && ok "no secrets or credential files staged"
+
+# ---------------------------------------------------------------------------
+# 3. Merge conflict markers
+# ---------------------------------------------------------------------------
+if git diff --cached -U0 -- "${staged[@]}" | grep -qE '^\+(<{7}|={7}|>{7})( |$)'; then
+  note "merge conflict markers in staged content"
+else
+  ok "no conflict markers"
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Oversized files (CLAUDE.md: watch bundle/binary size)
+# ---------------------------------------------------------------------------
+big=0
+for f in "${staged[@]}"; do
+  [ -f "$f" ] || continue
+  size=$(wc -c < "$f" | tr -d ' ')
+  if [ "$size" -gt 1048576 ]; then
+    note "$f is $((size / 1024))KB — over the 1MB limit"
+    big=1
+  fi
+done
+[ $big -eq 0 ] && ok "no oversized files"
+
+# ---------------------------------------------------------------------------
+# 5. Production-path hygiene (CLAUDE.md: no console.log, no // TODO)
+# ---------------------------------------------------------------------------
+# Empty arrays are expanded only behind a length guard: under `set -u`,
+# bash 3.2 treats "${arr[@]}" on an empty array as an unbound variable.
+hygiene=0
+if [ ${#staged_js[@]} -gt 0 ]; then
+  for f in "${staged_js[@]}"; do
+    case "$f" in test/*) continue ;; esac
+    if git diff --cached -U0 -- "$f" | grep -qE '^\+.*console\.(log|debug)\('; then
+      note "console.log/debug added in $f — use lib/logger.js"
+      hygiene=1
+    fi
+  done
+fi
+for f in "${staged[@]}"; do
+  # Markdown is where task notes belong, and the hooks themselves have to
+  # contain the very keywords they search for.
+  case "$f" in *.md|.githooks/*) continue ;; esac
+  if git diff --cached -U0 -- "$f" | grep -qiE '^\+.*(//|#)[[:space:]]*(TODO|FIXME)\b'; then
+    note "TODO/FIXME added in $f — track it in docs/ToDo.md instead"
+    hygiene=1
+  fi
+done
+# A stray .only() silently disables the rest of the suite while still going green.
+if [ ${#staged_js[@]} -gt 0 ]; then
+  for f in "${staged_js[@]}"; do
+    case "$f" in
+      test/*)
+        if git diff --cached -U0 -- "$f" | grep -qE '^\+.*\b(test|describe|it)\.only\('; then
+          note "$f has .only() — it would silently skip the rest of the suite"
+          hygiene=1
+        fi
+        ;;
+    esac
+  done
+fi
+[ $hygiene -eq 0 ] && ok "no debug leftovers, TODOs, or .only() in staged code"
+
+# ---------------------------------------------------------------------------
+# 6. package.json / package-lock.json stay in lockstep
+# ---------------------------------------------------------------------------
+pkg_staged=0; lock_staged=0
+for f in "${staged[@]}"; do
+  [ "$f" = "package.json" ] && pkg_staged=1
+  [ "$f" = "package-lock.json" ] && lock_staged=1
+done
+if [ $pkg_staged -eq 1 ] && [ $lock_staged -eq 0 ]; then
+  note "package.json staged without package-lock.json — run: npm install --package-lock-only"
+elif [ $pkg_staged -eq 1 ]; then
+  pkg_ver=$(git show :package.json  | sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' | head -1)
+  lock_ver=$(git show :package-lock.json | sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' | head -1)
+  if [ "$pkg_ver" != "$lock_ver" ]; then
+    note "version mismatch: package.json $pkg_ver vs lockfile $lock_ver"
+  else
+    ok "package.json and lockfile agree ($pkg_ver)"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Shell script linting (shellcheck is optional — skip cleanly if absent)
+# ---------------------------------------------------------------------------
+if [ ${#staged_sh[@]} -gt 0 ]; then
+  if command -v shellcheck >/dev/null 2>&1; then
+    if shellcheck "${staged_sh[@]}"; then
+      ok "shellcheck clean (${#staged_sh[@]} script(s))"
+    else
+      note "shellcheck reported problems"
+    fi
+  else
+    printf '  \033[33m-\033[0m shellcheck not installed — skipping shell lint\n'
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 8. ESLint on staged JS only
+# ---------------------------------------------------------------------------
+# A fresh clone has no node_modules yet; blocking every commit until someone
+# runs `npm install` would just teach people to reach for --no-verify.
+if [ ${#staged_js[@]} -gt 0 ]; then
+  if [ ! -x node_modules/.bin/eslint ]; then
+    printf '  \033[33m-\033[0m eslint not installed — run: npm install\n'
+  elif node_modules/.bin/eslint "${staged_js[@]}"; then
+    ok "eslint clean (${#staged_js[@]} file(s))"
+  else
+    note "eslint failed"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 9. Full test suite — it runs in ~2s, so there is no reason to defer it
+# ---------------------------------------------------------------------------
+if [ ${#staged_js[@]} -gt 0 ] && [ -d node_modules ]; then
+  if npm test --silent >/tmp/ccfleet-pretest.log 2>&1; then
+    ok "tests pass"
+  else
+    note "tests failed:"
+    tail -25 /tmp/ccfleet-pretest.log | sed 's/^/      /'
+  fi
+fi
+
+if [ $fail -ne 0 ]; then
+  printf '\n\033[31mpre-commit failed.\033[0m Fix the items above, or bypass with: git commit --no-verify\n'
+  exit 1
+fi
+
+printf '\n\033[32mpre-commit passed.\033[0m\n'
+exit 0

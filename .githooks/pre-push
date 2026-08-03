@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# ccfleet pre-push hook — last stop before anything leaves the machine.
+#
+# The pre-commit hook checks staged changes one commit at a time. This checks
+# the finished state of the branch, which catches the case where each commit
+# passed individually but the combination does not.
+#
+# Bypass: git push --no-verify
+set -uo pipefail
+
+echo "pre-push checks:"
+
+# Refuse to push straight to main. Everything reaches main through a PR.
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      printf '  \033[31m✗\033[0m direct push to main — open a PR instead\n'
+      printf '\n\033[31mpre-push failed.\033[0m Bypass with: git push --no-verify\n'
+      exit 1
+      ;;
+  esac
+done
+
+if ! npm run lint --silent; then
+  printf '  \033[31m✗\033[0m eslint failed on the full tree\n'
+  exit 1
+fi
+printf '  \033[32m✓\033[0m eslint clean\n'
+
+if ! npm test --silent >/tmp/ccfleet-prepush.log 2>&1; then
+  printf '  \033[31m✗\033[0m tests failed:\n'
+  tail -25 /tmp/ccfleet-prepush.log | sed 's/^/      /'
+  printf '\n\033[31mpre-push failed.\033[0m Bypass with: git push --no-verify\n'
+  exit 1
+fi
+printf '  \033[32m✓\033[0m tests pass\n'
+
+printf '\n\033[32mpre-push passed.\033[0m\n'
+exit 0

@@ -1,17 +1,33 @@
 name: CI
 
+# Runs on pull requests into main, and once more on main after merge.
+# Branch pushes deliberately do NOT trigger CI — the pre-commit and pre-push
+# hooks (scripts/install-hooks.sh) cover lint and tests locally, and every
+# branch reaches main through a PR anyway. Security/CVE scanning lives in
+# security.yml on a schedule, because CVEs are published on their own clock,
+# not on our commit clock.
 on:
-  push:
-    branches: ["**"]
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# Superseded PR runs are pointless — cancel them. Pushes to main are never
+# cancelled: every commit that lands on main gets verified on its own.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  test:
-    name: Test
+  # Lint and test share a checkout and a single `npm ci`. They were three
+  # separate jobs (test/lint/audit), which meant three runner boots and three
+  # dependency installs for ~3 seconds of actual work.
+  verify:
+    name: Lint & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -19,25 +35,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: env -i PATH="$PATH" HOME="$HOME" npm ci
-
-      - name: Run tests
-        run: env -i PATH="$PATH" HOME="$HOME" npm test
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
-        with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
 
       - name: Install dependencies
@@ -46,57 +44,64 @@ jobs:
       - name: Run ESLint
         run: env -i PATH="$PATH" HOME="$HOME" npm run lint
 
-  audit:
-    name: Dependency Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Run tests
+        run: env -i PATH="$PATH" HOME="$HOME" npm test
 
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: env -i PATH="$PATH" HOME="$HOME" npm ci
-
-      - name: Check for high/critical vulnerabilities
-        run: env -i PATH="$PATH" HOME="$HOME" npm audit --audit-level=high
-
-  trivy:
-    name: Trivy Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-
-      - name: Run Trivy (vuln + secret + misconfig)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,secret,misconfig
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
-          format: table
-
+  # The image build only tells us something new when the image inputs change.
+  # The job always runs and always reports, so it stays safe to mark as a
+  # required check — only the expensive steps are skipped.
   docker:
-    name: Docker Build & Scan
+    name: Docker Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whether image inputs changed
+        id: changes
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+            git fetch --no-tags --depth=0 origin "${{ github.base_ref }}" >/dev/null 2>&1 || true
+            changed=$(git diff --name-only "$base"...HEAD)
+          else
+            changed=$(git diff --name-only HEAD~1..HEAD 2>/dev/null || echo "Dockerfile")
+          fi
+
+          echo "changed files:"
+          echo "$changed" | sed 's/^/  /'
+
+          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|docker-compose\.yml|package\.json|package-lock\.json)$'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "No image inputs changed — skipping build."
+          fi
 
       - name: Build image
+        if: steps.changes.outputs.build == 'true'
         run: docker build -t ccfleet:ci .
 
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
-        with:
-          scan-type: image
-          image-ref: ccfleet:ci
-          scanners: vuln,secret
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
-          format: table
+      # Vulnerability scanning of the built image lives in security.yml on a
+      # schedule. Here we only prove the image still builds; a base-image CVE
+      # published this morning is not this PR's problem.
+      - name: Smoke-test the image
+        if: steps.changes.outputs.build == 'true'
+        run: |
+          set -euo pipefail
+          docker run --rm -d --name ccfleet-smoke -p 3001:3001 \
+            -e GIT_ROOT=/tmp -e BASIC_AUTH_USER= -e BASIC_AUTH_PASS= ccfleet:ci
+          for i in $(seq 1 20); do
+            if docker exec ccfleet-smoke wget -qO- http://localhost:3001/healthz >/dev/null 2>&1; then
+              echo "healthz responded after ${i}s"
+              docker rm -f ccfleet-smoke
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "container never became healthy — logs follow:"
+          docker logs ccfleet-smoke
+          docker rm -f ccfleet-smoke
+          exit 1
