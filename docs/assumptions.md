@@ -104,3 +104,11 @@ Non-obvious decisions made during ccfleet implementation. Each entry: assumption
 - **How to apply:** To scan daily instead of weekly, change the cron in `security.yml` to `"0 6 * * *"`. Do not add vulnerability scanning back into `ci.yml` — a CVE published this morning is not a defect in the pull request that happens to be open.
 - **Recorded by:** Claude (Opus 4.7)
 - **Date:** 2026-08-03
+
+---
+
+- **Assumption:** The Docker image is built on `node:22-alpine` and no longer runs `npm install -g npm@latest`. CI and the security workflow also test on Node 22.
+- **Why:** Node 20 reached end of life in April 2026. The unpinned global npm upgrade — originally added to pick up patched bundled dependencies — broke the image entirely the day npm 12 shipped, because npm 12 requires Node >=22 and refuses to install on Node 20. Nothing in the repository changed; the image rotted on its own and no one noticed, because image builds only ran on pull requests that happened to be open. The npm bundled with Node 22 is current, so the hand-rolled upgrade is unnecessary.
+- **How to apply:** Do not reintroduce `npm install -g npm@latest` or any other unpinned `@latest` install in a Dockerfile — it makes the build non-reproducible and turns an upstream release into an outage. If a bundled dependency needs patching, pin the exact version and let the Trivy image scan in `security.yml` confirm it.
+- **Recorded by:** Claude (Opus 4.7)
+- **Date:** 2026-08-03
