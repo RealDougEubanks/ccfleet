@@ -1,0 +1,82 @@
+name: Security
+
+# CVEs are published on their own schedule, not ours. Scanning on every commit
+# meant unrelated PRs went red the morning a base-image CVE dropped (see
+# CVE-2026-45447 in the 0.9.4 notes), while a quiet week with no commits got no
+# scanning at all. This runs weekly regardless of activity, plus on any change
+# that actually alters the dependency or image surface.
+#
+# To scan daily instead, change the cron to "0 6 * * *".
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays, 06:00 UTC
+  pull_request:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/security.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  dependencies:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: env -i PATH="$PATH" HOME="$HOME" npm ci
+
+      - name: Check for high/critical vulnerabilities
+        run: env -i PATH="$PATH" HOME="$HOME" npm audit --audit-level=high
+
+      # Secrets and IaC misconfiguration are properties of the source tree, so
+      # this is cheap and worth running alongside the dependency check. The
+      # pre-commit hook catches the obvious cases before they reach a branch;
+      # this is the backstop for anything committed with --no-verify.
+      - name: Trivy filesystem scan (secrets + misconfig)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
+
+  image:
+    name: Image Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Build image
+        run: docker build -t ccfleet:scan .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ccfleet:scan
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
