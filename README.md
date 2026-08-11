@@ -77,12 +77,33 @@ graph LR
 | Command | What it does |
 |---------|--------------|
 | `npm install` | Install dependencies |
-| `npm test` | Run the unit test suite (80 tests) |
+| `npm test` | Run the unit test suite (82 tests) |
 | `npm run lint` | Run ESLint across all source files |
 | `npm start` | Start the Express server |
 | `docker compose up -d` | Run in Docker (see `Dockerfile`, `docker-compose.yml`) |
 | `sudo bash scripts/install-launchd.sh` | Install as boot-time launchd services (macOS) |
 | `sudo bash scripts/install-systemd.sh` | Install as boot-time systemd services (Linux) |
+
+## Git Hooks
+
+After cloning, run the one-time hook installer:
+
+```bash
+scripts/install-hooks.sh
+```
+
+This points git at the version-controlled hooks in `.githooks/` via `core.hooksPath`. The hooks are optional — ccfleet runs fine without them — but they catch real problems before they reach CI or production.
+
+| Hook | When it runs | What it checks |
+|------|-------------|---------------|
+| `pre-commit` | Every `git commit` | Staged secrets and `.env` files; merge conflict markers; files over 1 MB; `console.log` in production code; `// TODO` comments; `.only()` in test files (which would skip the rest of the suite in CI); `package.json`/lockfile out of sync; shellcheck on shell scripts; ESLint on staged JS; full test suite |
+| `pre-push` | Every `git push` | Blocks direct pushes to `main`; full lint and test suite |
+
+**Why bother if CI already catches this?** The hooks give you the feedback in ~3 seconds at commit time instead of 2–3 minutes after a push. Secrets in particular are the one failure mode worth catching before they leave your machine — rotating a committed credential that hit a remote is painful even if you catch it immediately.
+
+**Bypassing:** `git commit --no-verify` skips the pre-commit hook for a single commit. CI on the pull request remains the enforcement boundary and cannot be bypassed.
+
+**Uninstalling:** `git config --unset core.hooksPath`
 
 ## Environment Variables
 
