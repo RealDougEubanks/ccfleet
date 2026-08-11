@@ -126,6 +126,83 @@ test('buildClaudeCommand throws on invalid CLAUDE_MODEL', () => {
   }
 });
 
+// tmux joins the returned argv into a single string and runs it through
+// `$SHELL -c`, so the allow-list regexes in buildClaudeCommand are the only
+// thing standing between a malformed name and command injection. These tests
+// pin that boundary: relaxing the regex to permit any of these characters
+// would make the join exploitable.
+const SHELL_METACHARACTERS = [
+  'a;id',
+  'a&&id',
+  'a||id',
+  'a|id',
+  'a$(id)',
+  'a`id`',
+  'a b',
+  'a>b',
+  'a<b',
+  'a\nid',
+  'a&id',
+  "a'id",
+  'a"id',
+  'a*',
+  'a~',
+];
+
+test('buildClaudeCommand rejects remote-control names with shell metacharacters', () => {
+  for (const name of SHELL_METACHARACTERS) {
+    assert.throws(
+      () => buildClaudeCommand({ remoteControlName: name, continueExisting: false }),
+      /invalid remote-control name/,
+      `expected rejection for ${JSON.stringify(name)}`,
+    );
+  }
+});
+
+test('buildClaudeCommand rejects CLAUDE_MODEL with shell metacharacters', () => {
+  const prev = process.env.CLAUDE_MODEL;
+  try {
+    for (const model of SHELL_METACHARACTERS) {
+      process.env.CLAUDE_MODEL = model;
+      assert.throws(
+        () => buildClaudeCommand({ remoteControlName: 'MacMini-x', continueExisting: false }),
+        /invalid CLAUDE_MODEL/,
+        `expected rejection for ${JSON.stringify(model)}`,
+      );
+    }
+  } finally {
+    if (prev === undefined) delete process.env.CLAUDE_MODEL;
+    else process.env.CLAUDE_MODEL = prev;
+  }
+});
+
+test('buildRemoteControlName rejects prefixes with shell metacharacters', () => {
+  const prev = process.env.REMOTE_CONTROL_PREFIX;
+  try {
+    for (const prefix of SHELL_METACHARACTERS) {
+      process.env.REMOTE_CONTROL_PREFIX = prefix;
+      assert.throws(
+        () => buildRemoteControlName('safeproject'),
+        /unsafe remote-control prefix/,
+        `expected rejection for ${JSON.stringify(prefix)}`,
+      );
+    }
+  } finally {
+    if (prev === undefined) delete process.env.REMOTE_CONTROL_PREFIX;
+    else process.env.REMOTE_CONTROL_PREFIX = prev;
+  }
+});
+
+test('every token buildClaudeCommand emits is safe to join with spaces', () => {
+  const args = buildClaudeCommand({
+    remoteControlName: 'MacMini-ClaudeMarketplace',
+    continueExisting: true,
+  });
+  for (const token of args) {
+    assert.match(token, /^[a-zA-Z0-9._-]+$/, `unsafe token: ${JSON.stringify(token)}`);
+  }
+});
+
 test('encodeProjectPath converts slashes to dashes', () => {
   assert.equal(encodeProjectPath('/a/b/c'), '-a-b-c');
 });

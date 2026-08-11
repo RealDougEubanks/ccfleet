@@ -23,7 +23,13 @@ ccfleet is designed to run on a single user's always-on Mac, accessible only ove
 
 ## Access Control Model
 
-ccfleet has no mandatory built-in authentication. Access control is layered at the network:
+> **SECURITY: Authentication and authorization are explicitly out of scope for ccfleet.** The application does not implement identity, sessions, user accounts, roles, brute-force lockout, or MFA, and it will not. Enforcing access is the operator's responsibility, at the network layer, using a reverse proxy or zero-trust gateway — Cloudflare Access, nginx with auth, Tailscale, WireGuard, or equivalent. **An unproxied ccfleet reachable from an untrusted network is fully compromised**: every API route, including the `.env` editor and the process-restart endpoint, is available to anyone who can open a TCP connection to it.
+>
+> Security findings that amount to "ccfleet should authenticate users" are working as designed and will be closed. Findings about the proxy *integration* — `trust proxy` handling, header spoofing, request smuggling, or bypass of the intended perimeter — are in scope and worth reporting.
+
+The optional basic auth below is a convenience credential layer, not the security boundary. It has no lockout and no brute-force protection; do not rely on it as the sole control.
+
+Access control is layered at the network:
 
 | Access path | How it's protected |
 |-------------|-------------------|
@@ -63,6 +69,7 @@ ccfleet does **not** handle:
 | `Cache-Control: private, no-store` on API responses | `server.js` |
 | Auth failures logged with IP, path, method (when basic auth is enabled) | `lib/auth.js` |
 | Unauthenticated health endpoints (no secrets disclosed) | `server.js` |
+| Claude launch argv restricted to `[a-zA-Z0-9._-]` — the boundary that keeps tmux's `$SHELL -c` join non-injectable | `lib/claude.js`, `test/claude.test.js` |
 | `x-powered-by` header disabled | `server.js` |
 | Atomic, mode-`0600` write of `~/.claude.json` when pre-trusting a project | `lib/claude.js` |
 | `.env` editor: Zod schema + 64 KB read cap + null-byte strip + CRLF normalisation + atomic mode-`0600` write + `.gitignore` guard | `server.js` |

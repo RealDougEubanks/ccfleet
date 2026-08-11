@@ -5,11 +5,12 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      # Mount the directory that contains your git projects (read-only)
+      # Mount the directory that contains your git projects. This must be
+      # writable: the .env editor (PUT /api/projects/:name/env) writes into
+      # each project directory, and appends .env to its .gitignore.
       - type: bind
         source: ${GIT_ROOT:-/srv/git}
         target: /git
-        read_only: true
       # Mount the host tmux socket so ccfleet can manage sessions
       - type: bind
         source: /tmp/tmux-${UID:-1000}

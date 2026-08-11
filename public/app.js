@@ -34,10 +34,11 @@ const el = {
   statDisk: document.getElementById('stat-disk'),
 };
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
+function elem(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
 }
 
 function timeSince(iso) {
@@ -150,7 +151,7 @@ async function refresh() {
 function render() {
   const activeNames = new Set(state.sessions.map((s) => s.session_name));
 
-  el.active.innerHTML = '';
+  el.active.replaceChildren();
   if (state.sessions.length === 0) {
     el.activeEmpty.hidden = false;
   } else {
@@ -161,7 +162,7 @@ function render() {
   }
 
   const available = state.projects.filter((p) => !activeNames.has(p.session_name));
-  el.available.innerHTML = '';
+  el.available.replaceChildren();
   if (available.length === 0) {
     el.availableEmpty.textContent = state.projects.length > 0
       ? 'All projects have active sessions.'
@@ -176,26 +177,27 @@ function render() {
 }
 
 function renderSessionCard(s) {
-  const card = document.createElement('div');
-  card.className = 'card';
-  card.innerHTML = `
-    <div class="card-header">
-      <span class="project-name">${escapeHtml(s.project_name)}</span>
-      <span class="badge ${escapeHtml(s.status)}">${escapeHtml(s.status)}</span>
-    </div>
-    <div class="card-meta">started ${escapeHtml(timeSince(s.started_at))} · ${escapeHtml(s.current_command || 'unknown')}</div>
-    <div class="card-actions">
-      <button class="primary" data-action="open">Open</button>
-      <button data-action="attach" ${state.config.ttyd_url ? '' : 'disabled'}>Attach</button>
-      <button data-action="env">.env</button>
-      <button class="danger" data-action="kill">Kill</button>
-    </div>
-  `;
-  card.querySelector('[data-action="open"]').addEventListener('click', () => {
+  const header = elem('div', 'card-header');
+  header.append(
+    elem('span', 'project-name', s.project_name),
+    elem('span', `badge ${s.status}`, s.status),
+  );
+
+  const meta = elem(
+    'div',
+    'card-meta',
+    `started ${timeSince(s.started_at)} · ${s.current_command || 'unknown'}`,
+  );
+
+  const openBtn = elem('button', 'primary', 'Open');
+  openBtn.addEventListener('click', () => {
     const u = state.config.remote_control_url;
     if (/^https?:\/\//i.test(u)) window.open(u, '_blank', 'noopener');
   });
-  card.querySelector('[data-action="attach"]').addEventListener('click', () => {
+
+  const attachBtn = elem('button', null, 'Attach');
+  attachBtn.disabled = !state.config.ttyd_url;
+  attachBtn.addEventListener('click', () => {
     if (!state.config.ttyd_url) return;
     const url = new URL(state.config.ttyd_url);
     if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
@@ -203,24 +205,33 @@ function renderSessionCard(s) {
     }
     if (/^https?:$/i.test(url.protocol)) window.open(url.toString(), '_blank', 'noopener');
   });
-  card.querySelector('[data-action="env"]').addEventListener('click', () => openEnvEditor(s.project_name));
-  card.querySelector('[data-action="kill"]').addEventListener('click', () => killSession(s));
+
+  const envBtn = elem('button', null, '.env');
+  envBtn.addEventListener('click', () => openEnvEditor(s.project_name));
+
+  const killBtn = elem('button', 'danger', 'Kill');
+  killBtn.addEventListener('click', () => killSession(s));
+
+  const actions = elem('div', 'card-actions');
+  actions.append(openBtn, attachBtn, envBtn, killBtn);
+
+  const card = elem('div', 'card');
+  card.append(header, meta, actions);
   return card;
 }
 
 function renderProjectRow(p) {
-  const li = document.createElement('li');
-  li.className = 'row';
-  li.innerHTML = `
-    <span class="project-name">${escapeHtml(p.name)}</span>
-    <div class="row-actions">
-      <button data-action="env">.env</button>
-      <button class="primary" data-action="start">Start session</button>
-    </div>
-  `;
-  li.querySelector('[data-action="env"]').addEventListener('click', () => openEnvEditor(p.name));
-  const btn = li.querySelector('[data-action="start"]');
-  btn.addEventListener('click', () => startSession(p, btn));
+  const envBtn = elem('button', null, '.env');
+  envBtn.addEventListener('click', () => openEnvEditor(p.name));
+
+  const startBtn = elem('button', 'primary', 'Start session');
+  startBtn.addEventListener('click', () => startSession(p, startBtn));
+
+  const actions = elem('div', 'row-actions');
+  actions.append(envBtn, startBtn);
+
+  const li = elem('li', 'row');
+  li.append(elem('span', 'project-name', p.name), actions);
   return li;
 }
 

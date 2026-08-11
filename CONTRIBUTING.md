@@ -57,7 +57,7 @@ This points `core.hooksPath` at [`.githooks/`](.githooks), so the hooks are vers
 
 ## PR Checklist
 
-- [ ] `npm test` passes (82/82)
+- [ ] `npm test` passes (86/86)
 - [ ] `npm run lint` passes (0 errors)
 - [ ] No new secrets or hardcoded credentials
 - [ ] Input handlers (any new HTTP route, any new shell-out) have unit tests for valid, invalid, oversized, and exception paths
