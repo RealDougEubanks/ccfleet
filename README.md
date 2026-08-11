@@ -30,7 +30,7 @@ git clone <repo-url>
 cd ccfleet
 npm install
 cp .env.example .env   # fill in GIT_ROOT at minimum
-npm test               # 80/80 should pass
+npm test               # 86/86 should pass
 npm start
 ```
 
