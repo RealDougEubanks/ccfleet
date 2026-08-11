@@ -485,7 +485,7 @@ app.post('/api/system/restart', requireJson, (req, res) => {
 });
 
 app.post('/api/system/ttyd/restart', requireJson, (req, res, next) => {
-  execFile('pkill', ['-x', 'ttyd'], (err) => {
+  execFile('pkill', ['-x', 'ttyd'], { timeout: 5000 }, (err) => {
     if (err && err.code !== 1) return next(err);
     logger.info({ event: 'ttyd_restart_requested', ip: req.ip }, 'ttyd restart requested via API');
     res.status(202).json({ message: 'ttyd restarting' });

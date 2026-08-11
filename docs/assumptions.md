@@ -112,3 +112,27 @@ Non-obvious decisions made during ccfleet implementation. Each entry: assumption
 - **How to apply:** Do not reintroduce `npm install -g npm@latest` or any other unpinned `@latest` install in a Dockerfile — it makes the build non-reproducible and turns an upstream release into an outage. If a bundled dependency needs patching, pin the exact version and let the Trivy image scan in `security.yml` confirm it.
 - **Recorded by:** Claude (Opus 4.7)
 - **Date:** 2026-08-03
+
+---
+
+- **Assumption:** Authentication, authorization, and brute-force protection are out of scope for ccfleet. The operator supplies them at the network layer via Cloudflare Access, nginx, Tailscale, or an equivalent reverse proxy. The optional `BASIC_AUTH_USER`/`BASIC_AUTH_PASS` layer is a convenience, not the security boundary, and deliberately has no lockout or rate-limit-on-failure behaviour of its own.
+- **Why:** ccfleet is a single-user control plane for tmux sessions on a personal machine. Building identity, sessions, and lockout into it would duplicate what the perimeter already does far better, and a half-implemented auth system invites more risk than it removes by implying a protection level that does not exist. The 2026-08-11 security audit raised unauthenticated `/health` access and the absence of brute-force protection on basic auth; both were reviewed and accepted as consequences of this boundary rather than defects.
+- **How to apply:** Close findings that amount to "ccfleet should authenticate users." Treat findings about the proxy integration — `trust proxy` handling, forwarded-header spoofing, or perimeter bypass — as in scope. If ccfleet ever grows multi-user support, this assumption must be revisited first.
+- **Recorded by:** Claude (Sonnet 4.6)
+- **Date:** 2026-08-11
+
+---
+
+- **Assumption:** The `GIT_ROOT` bind mount in `docker-compose.yml` is read-write, not read-only.
+- **Why:** It was originally mounted `read_only: true`, which silently broke the `.env` editor: `PUT /api/projects/:name/env` writes into each project directory and appends `.env` to that project's `.gitignore`. Under Docker every save failed with `EROFS`, surfaced only as a generic 500, and the user's edits were lost with no indication that the container configuration was the cause. The feature requires write access to `GIT_ROOT`; the mount has to reflect that.
+- **How to apply:** Do not reintroduce `read_only: true` on this mount without first removing or reworking the `.env` editor. If read-only mounting is desired for a deployment, disable the editor rather than letting writes fail at runtime.
+- **Recorded by:** Claude (Sonnet 4.6)
+- **Date:** 2026-08-11
+
+---
+
+- **Assumption:** The frontend builds DOM nodes with `createElement`/`textContent` (via the `elem` helper in `public/app.js`) instead of assigning HTML strings to `innerHTML`.
+- **Why:** The previous code interpolated values into `innerHTML` template literals and relied on an `escapeHtml` helper being applied at every interpolation point. That was correct as written, but it made XSS a one-forgotten-call mistake, with nothing in lint or tests to catch the omission — and `current_command` reaches the browser straight from `tmux` output without server-side allow-listing. Building nodes and assigning `textContent` makes the safe path the only path, and `escapeHtml` was deleted so it cannot be partially reapplied later.
+- **How to apply:** Do not reintroduce `innerHTML` assignment in `public/app.js`. Use `elem(tag, className, text)` for new nodes and `replaceChildren()` to clear containers.
+- **Recorded by:** Claude (Sonnet 4.6)
+- **Date:** 2026-08-11
