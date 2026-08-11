@@ -77,7 +77,7 @@ graph LR
 | Command | What it does |
 |---------|--------------|
 | `npm install` | Install dependencies |
-| `npm test` | Run the unit test suite (82 tests) |
+| `npm test` | Run the unit test suite (86 tests) |
 | `npm run lint` | Run ESLint across all source files |
 | `npm start` | Start the Express server |
 | `docker compose up -d` | Run in Docker (see `Dockerfile`, `docker-compose.yml`) |
