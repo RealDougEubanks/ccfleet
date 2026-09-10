@@ -9,7 +9,7 @@ name: Security
 # To scan daily instead, change the cron to "0 6 * * *".
 on:
   schedule:
-    - cron: "0 6 * * 1"  # Mondays, 06:00 UTC
+    - cron: "0 6 * * 5"  # Fridays, 06:00 UTC
   pull_request:
     branches: [main]
     paths:

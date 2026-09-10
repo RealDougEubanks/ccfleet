@@ -305,6 +305,32 @@ test('PUT /api/projects/:name/env returns 415 without JSON content-type', async 
   assert.equal(res.status, 415);
 });
 
+// Traversal attempts should be caught by isValidProjectName (which blocks '/'
+// and '..') before they reach the containment check. These tests verify that
+// both layers are in place and that neither route silently accepts a bad name.
+test('GET /api/projects/:name/env rejects dotdot traversal', async () => {
+  const res = await get('/api/projects/..%2Fetc%2Fpasswd/env');
+  assert.equal(res.status, 400);
+});
+
+test('PUT /api/projects/:name/env rejects dotdot traversal', async () => {
+  const res = await post('/api/projects/..%2Fetc%2Fpasswd/env', { content: '' }, {}, 'PUT');
+  assert.equal(res.status, 400);
+});
+
+test('GET /api/projects/:name/env returns 422 when .env exceeds size limit', async () => {
+  const projectDir = path.join(tmpGitRoot, 'big-env-test');
+  await fs.mkdir(path.join(projectDir, '.git'), { recursive: true });
+  try {
+    // Write a file just over the 64 KB limit.
+    await fs.writeFile(path.join(projectDir, '.env'), 'X'.repeat(65537), { mode: 0o600 });
+    const res = await get('/api/projects/big-env-test/env');
+    assert.equal(res.status, 422);
+  } finally {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  }
+});
+
 // ---- session reload ---------------------------------------------------------
 
 test('POST /api/projects/:name/sessions/reload with invalid name returns 400', async () => {
