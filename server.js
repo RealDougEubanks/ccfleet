@@ -303,9 +303,8 @@ const GITIGNORE_MAX_BYTES = 1024 * 1024; // 1 MB — a larger .gitignore is almo
 async function ensureEnvIgnored(gitignorePath) {
   let existing = '';
   try {
-    const stat = await fs.stat(gitignorePath);
-    if (stat.size > GITIGNORE_MAX_BYTES) return; // too large to be a real .gitignore; skip safely
     existing = await fs.readFile(gitignorePath, 'utf8');
+    if (existing.length > GITIGNORE_MAX_BYTES) return; // too large to be a real .gitignore; skip safely
   } catch (err) {
     if (err.code !== 'ENOENT') throw err;
   }
@@ -323,17 +322,29 @@ app.get('/api/projects/:project_name/env', async (req, res, next) => {
     if (!isValidProjectName(projectName)) {
       return res.status(400).json({ error: 'invalid project name' });
     }
-    if (!(await projectExists(getGitRoot(), projectName))) {
+    const gitRoot = getGitRoot();
+    const projectDir = path.join(gitRoot, projectName);
+    if (!path.resolve(projectDir).startsWith(path.resolve(gitRoot) + path.sep)) {
+      return res.status(400).json({ error: 'invalid project name' });
+    }
+    if (!(await projectExists(gitRoot, projectName))) {
       return res.status(404).json({ error: 'project not found' });
     }
-    const envPath = path.join(getGitRoot(), projectName, '.env');
+    const envPath = path.join(projectDir, '.env');
     try {
-      const stat = await fs.stat(envPath);
-      if (stat.size > 65536) {
-        return res.status(422).json({ error: '.env file exceeds maximum size' });
+      // Use a single file handle so stat and read operate on the same inode,
+      // eliminating the TOCTOU window between the size check and the read.
+      const fh = await fs.open(envPath, 'r');
+      try {
+        const { size } = await fh.stat();
+        if (size > 65536) {
+          return res.status(422).json({ error: '.env file exceeds maximum size' });
+        }
+        const content = await fh.readFile({ encoding: 'utf8' });
+        return res.json({ content, exists: true });
+      } finally {
+        await fh.close();
       }
-      const content = await fs.readFile(envPath, 'utf8');
-      return res.json({ content, exists: true });
     } catch (err) {
       if (err.code === 'ENOENT') return res.json({ content: '', exists: false });
       throw err;
@@ -349,7 +360,12 @@ app.put('/api/projects/:project_name/env', requireJson, async (req, res, next) =
     if (!isValidProjectName(projectName)) {
       return res.status(400).json({ error: 'invalid project name' });
     }
-    if (!(await projectExists(getGitRoot(), projectName))) {
+    const gitRoot = getGitRoot();
+    const projectDir = path.join(gitRoot, projectName);
+    if (!path.resolve(projectDir).startsWith(path.resolve(gitRoot) + path.sep)) {
+      return res.status(400).json({ error: 'invalid project name' });
+    }
+    if (!(await projectExists(gitRoot, projectName))) {
       return res.status(404).json({ error: 'project not found' });
     }
     const parsed = updateEnvSchema.safeParse(req.body);
@@ -361,7 +377,6 @@ app.put('/api/projects/:project_name/env', requireJson, async (req, res, next) =
       .split('\x00').join('')
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n');
-    const projectDir = path.join(getGitRoot(), projectName);
     const envPath = path.join(projectDir, '.env');
     const tmp = `${envPath}.ccfleet.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
     try {
