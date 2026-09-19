@@ -4,10 +4,16 @@ name: Release
 # Builds the Docker image, pushes it to GHCR with semver tags, attests
 # build provenance for supply-chain verification, and creates a GitHub
 # Release if one does not already exist for the tag.
+#
+# Pattern note: GitHub filter patterns treat + as "one or more of the
+# preceding SINGLE character", so [0-9]+ does not mean "one or more
+# digits" the way it does in regex — it means a digit followed by a
+# literal +. Use [0-9]* instead: [0-9] matches one digit and * (a true
+# glob wildcard) matches any additional digits that follow.
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]*.[0-9]*.[0-9]*'
 
 permissions:
   contents: write    # create GitHub Release
