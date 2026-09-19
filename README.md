@@ -14,7 +14,11 @@ generated-by: doc-refresh skill
 
 > **Prerequisites:** Node.js 20+, `tmux`, `claude` CLI, and a populated `~/git/` directory of repositories.
 
-**Option A — Docker**
+**Option A — Docker (Linux only)**
+
+> Docker requires a Linux host. On macOS the container runs inside a VM that
+> cannot reach the host tmux server or the host `claude` binary, so sessions
+> will not work. Use Option B or C on macOS.
 
 ```bash
 git clone <repo-url>
@@ -80,7 +84,7 @@ graph LR
 | `npm test` | Run the unit test suite (86 tests) |
 | `npm run lint` | Run ESLint across all source files |
 | `npm start` | Start the Express server |
-| `docker compose up -d` | Run in Docker (see `Dockerfile`, `docker-compose.yml`) |
+| `docker compose up -d` | Run in Docker — **Linux hosts only** (see `Dockerfile`, `docker-compose.yml`) |
 | `sudo bash scripts/install-launchd.sh` | Install as boot-time launchd services (macOS) |
 | `sudo bash scripts/install-systemd.sh` | Install as boot-time systemd services (Linux) |
 

@@ -30,7 +30,7 @@ services:
       - TRUST_PROXY=${TRUST_PROXY:-172.16.0.0/12}
       - TMUX_TMPDIR=/tmp/tmux-1000
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/readyz"]
       interval: 30s
       timeout: 5s
       retries: 3
