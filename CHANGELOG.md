@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.6] — 2026-09-19
+
+### Fixed
+- **`spawn tmux ENOENT` on every `/api/sessions` request under Docker** — the runtime image had no tmux client. The server shells out to the tmux *client* to list and manage sessions; the tmux *server* runs on the host and is reachable via socket bind-mount. Added `apk add --no-cache tmux` to the runtime stage. (`Dockerfile`)
+- **Docker healthcheck reported `healthy` while all requests 500'd** — both the `Dockerfile` `HEALTHCHECK` and `docker-compose.yml` probed `/healthz`, which only confirms the process is alive. Changed both to probe `/readyz`, which also verifies that tmux and `GIT_ROOT` are reachable before reporting ready. (`Dockerfile`, `docker-compose.yml`)
+- **Fresh clone crash-looped on `Cannot find module 'dotenv'` after `install-launchd.sh`** — the script started the service without first installing Node dependencies, so every boot attempt failed with `MODULE_NOT_FOUND` until `npm ci` was run by hand. The script now detects a missing `node_modules` directory and runs `npm ci --omit=dev` as the target user before installing the LaunchDaemon. (`scripts/install-launchd.sh`)
+- **Three moderate npm vulnerabilities** — `qs` 6.15.2 → 6.16.0 (array-limit bypass and DoS via attacker-controlled `isBuffer`), `express` 4.22.2 → 4.22.3, `body-parser` 1.20.6 → 1.20.8, `side-channel` 1.1.0 → 1.1.1. (`package-lock.json`)
+
+### Documentation
+- **README clarifies that Docker requires a Linux host** — on macOS the container runs inside a VM that cannot reach the host tmux server or `claude` binary. macOS users should use the Node direct or launchd paths. (`README.md`)
+
 ## [0.9.5] — 2026-08-11
 
 ### Fixed
