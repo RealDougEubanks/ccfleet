@@ -19,8 +19,10 @@ RUN npm ci --omit=dev --ignore-scripts
 
 FROM node:22-alpine
 WORKDIR /app
-# Pull patched alpine packages on top of the base image.
-RUN apk -U upgrade --no-cache
+# Pull patched alpine packages on top of the base image, then add tmux.
+# The server shells out to the tmux client to manage sessions; the tmux
+# server itself runs on the host and is reachable via the socket bind-mount.
+RUN apk -U upgrade --no-cache && apk add --no-cache tmux
 
 # Drop npm and npx from the runtime image. Dependencies are installed in the
 # deps stage and copied in; nothing past this point needs a package manager.
@@ -45,6 +47,6 @@ ENV NODE_ENV=production \
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:3001/healthz || exit 1
+  CMD wget -qO- http://localhost:3001/readyz || exit 1
 
 CMD ["node", "server.js"]

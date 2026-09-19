@@ -58,12 +58,26 @@ NODE_VERSION=$("$NODE_BIN" --version 2>/dev/null | sed 's/v//')
 NODE_MAJOR=$(echo "$NODE_VERSION" | cut -d. -f1)
 [ "$NODE_MAJOR" -ge 20 ] || die "Node.js 20+ required, found v$NODE_VERSION"
 
+NPM_BIN=$(command -v npm 2>/dev/null \
+  || ls /opt/homebrew/bin/npm /usr/local/bin/npm 2>/dev/null | head -1 \
+  || die "npm not found — install Node.js 20+ first")
+
 echo "Using node:        $NODE_BIN"
 echo "Install directory: $INSTALL_DIR"
 echo "Run-as user:       $CCFLEET_USER"
 echo "Home:              $USER_HOME"
 echo "Logs:              $LOG_DIR"
 echo ""
+
+# Install/update Node dependencies if node_modules is missing or stale.
+if [ ! -d "$INSTALL_DIR/node_modules" ]; then
+  echo "node_modules not found — running npm ci..."
+  # Run as the target user so files are owned correctly, not as root.
+  sudo -u "$CCFLEET_USER" "$NPM_BIN" ci --prefix "$INSTALL_DIR" --omit=dev \
+    || die "npm ci failed — check the error above and try again"
+  echo "  dependencies installed"
+  echo ""
+fi
 
 # ---- create log directory ---------------------------------------------------
 
