@@ -80,9 +80,20 @@ NODE_VERSION=$("$NODE_BIN" --version 2>/dev/null | sed 's/v//')
 NODE_MAJOR=$(echo "$NODE_VERSION" | cut -d. -f1)
 [ "$NODE_MAJOR" -ge 20 ] || die "Node.js 20+ required, found v$NODE_VERSION"
 
+NPM_BIN=$(find_bin npm) || die "npm not found — install Node.js 20+ first"
+
 # Check for .env file and GIT_ROOT
 if ! grep -q "^GIT_ROOT=" "$ENV_FILE"; then
   die "GIT_ROOT is not set in $ENV_FILE — edit it and try again"
+fi
+
+# Install/update Node dependencies if node_modules is missing or stale.
+if [ ! -d "$INSTALL_DIR/node_modules" ]; then
+  echo "node_modules not found — running npm ci..."
+  sudo -u "$CCFLEET_USER" "$NPM_BIN" ci --prefix "$INSTALL_DIR" --omit=dev \
+    || die "npm ci failed — check the error above and try again"
+  echo "  dependencies installed"
+  echo ""
 fi
 
 # ---- build PATH for services ------------------------------------------------
