@@ -27,15 +27,51 @@ cp .env.example .env   # fill in GIT_ROOT at minimum
 docker compose up -d
 ```
 
-**Option B — Node directly**
+**Option B — Node directly (foreground)**
 
 ```bash
 git clone <repo-url>
 cd ccfleet
-npm install
+npm ci --omit=dev
 cp .env.example .env   # fill in GIT_ROOT at minimum
 npm test               # 86/86 should pass
 npm start
+```
+
+Open `http://<host>:3001`.
+
+**Option C — Boot-time service (macOS or Linux)**
+
+This is the recommended path for a machine you SSH into. The service starts before any user logs in and restarts automatically if it crashes.
+
+*macOS (launchd):*
+```bash
+git clone <repo-url>
+cd ccfleet
+cp .env.example .env   # fill in GIT_ROOT at minimum
+sudo bash scripts/install-launchd.sh
+```
+
+The script installs both ccfleet and ttyd as LaunchDaemons under
+`/Library/LaunchDaemons/`. Dependencies (`node_modules`) are installed
+automatically if missing. Logs land in `~/Library/Logs/ccfleet/`.
+
+```bash
+# Verify it started
+curl http://localhost:3001/readyz          # {"status":"ok"}
+launchctl list | grep ccfleet             # both services listed
+
+# Uninstall
+sudo bash scripts/install-launchd.sh uninstall
+```
+
+*Linux (systemd):*
+```bash
+git clone <repo-url>
+cd ccfleet
+npm ci --omit=dev
+cp .env.example .env   # fill in GIT_ROOT at minimum
+sudo bash scripts/install-systemd.sh
 ```
 
 Open `http://<host>:3001`.
@@ -80,7 +116,7 @@ graph LR
 
 | Command | What it does |
 |---------|--------------|
-| `npm install` | Install dependencies |
+| `npm ci --omit=dev` | Install production dependencies (use `npm ci` for dev/test) |
 | `npm test` | Run the unit test suite (86 tests) |
 | `npm run lint` | Run ESLint across all source files |
 | `npm start` | Start the Express server |
