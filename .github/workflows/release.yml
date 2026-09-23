@@ -93,12 +93,5 @@ jobs:
 
           # Append Docker pull instructions to the release body.
           EXISTING=$(gh release view "$TAG" --json body -q '.body')
-          gh release edit "$TAG" --notes "${EXISTING}
-
-## Docker image
-
-\`\`\`bash
-docker pull ghcr.io/${{ github.repository_owner }}/ccfleet:${TAG}
-# or pin to this exact build:
-docker pull ghcr.io/${{ github.repository_owner }}/ccfleet@${DIGEST}
-\`\`\`"
+          DOCKER_NOTES=$(printf '\n## Docker image\n\n```bash\ndocker pull ghcr.io/${{ github.repository_owner }}/ccfleet:%s\n# or pin to this exact build:\ndocker pull ghcr.io/${{ github.repository_owner }}/ccfleet@%s\n```' "$TAG" "$DIGEST")
+          gh release edit "$TAG" --notes "${EXISTING}${DOCKER_NOTES}"
