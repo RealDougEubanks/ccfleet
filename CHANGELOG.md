@@ -6,8 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
-- **`CLAUDE_CODE_OAUTH_TOKEN` option** — sessions can authenticate with a long-lived token from `claude setup-token` instead of the CLI's Keychain login, which is locked on macOS until someone logs in to the desktop. That lockout left sessions started by the boot-time service without credentials. ccfleet validates the token at startup and on config reload, never logs it, and passes it to sessions through tmux `update-environment` so it never appears on a command line or in `ps`. (`lib/claude.js`, `lib/tmux.js`, `server.js`)
-- **`claude_auth` check in `/health`** — runs `claude auth status` and reports `ok`/`fail` plus the auth method (`oauth_token` or `claude.ai`). A failed check marks the service `degraded`. The CLI's email and org fields are dropped before the response is built. It detects missing or unreadable credentials, not an expired token. (`lib/health.js`)
+- **`claude_auth` check in `/health`** — runs `claude auth status` and reports the login method. Status is `ok` for a claude.ai subscription login, `degraded` for a `claude setup-token` token or API key, and `fail` when there is no readable login. Tokens and API keys cover model calls only, so sessions start but never show up in Remote Control and lose the claude.ai MCP connectors. The CLI's email and org fields are dropped before the response is built. The check can't detect an expired login. (`lib/health.js`)
+
+### Documentation
+- **Claude login** — the README explains which login sessions need, where the CLI stores it on an SSH-only machine, and why `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` must stay out of ccfleet's `.env`. `docs/ENV_VARS.md` lists both under "Variables that must not be set", and the runbook gains entries for `claude_auth: fail` and `claude_auth: degraded`.
 
 ## [0.9.6] — 2026-09-19
 

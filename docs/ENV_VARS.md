@@ -22,13 +22,21 @@ cp .env.example .env
 | `CLAUDE_MODEL` | no | `claude-sonnet-4-6` | Model name passed to `claude --model` | `lib/claude.js` |
 | `CLAUDE_EFFORT` | no | `medium` | Effort level passed to `claude --effort`. Must be `low`, `medium`, `high`, or `highest` | `lib/claude.js` |
 | `CLAUDE_SKIP_PERMISSIONS` | no | `false` | Set to `true` to pass `--dangerously-skip-permissions` to every claude session. **Disables all permission prompts — claude can read, write, and delete any file your account can access without asking.** Only enable if you fully understand and accept the risk. Never set on a shared machine. | `lib/claude.js` |
-| `CLAUDE_CODE_OAUTH_TOKEN` | no | — | Long-lived login token from `claude setup-token`. Every session ccfleet starts gets it, so sessions authenticate at boot before anyone has logged in (needed on macOS, where the default login sits in the locked login Keychain). Must be 20–512 characters of `[A-Za-z0-9_-]`; a malformed value stops ccfleet at startup. Passed to sessions through tmux `update-environment`, never on a command line. A changed token reaches new sessions only — stop and start a running session to pick it up. `/health` reports `claude_auth.method: oauth_token` when it is in use. | `lib/claude.js`, `lib/tmux.js` |
 | `REMOTE_CONTROL_PREFIX` | no | `os.hostname()` | Host prefix prepended to the per-session `--remote-control` identifier. Defaults to the machine hostname. Set this explicitly if the hostname is long, ambiguous, or changes (e.g. DHCP) | `lib/claude.js` |
 | `TTYD_URL` | no | empty | URL of the optional `ttyd` browser terminal. Attach button hidden when unset | `server.js` |
 | `REMOTE_CONTROL_URL` | no | `https://claude.ai/code` | URL the Open button deep-links to | `server.js` |
 | `LOG_LEVEL` | no | `info` | `pino` log level (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) | `lib/logger.js` |
 | `BASIC_AUTH_USER` | no | — | Username for optional HTTP Basic authentication. Both this and `BASIC_AUTH_PASS` must be set to enable basic auth | `lib/auth.js` |
 | `BASIC_AUTH_PASS` | no | — | Password for optional HTTP Basic authentication | `lib/auth.js` |
+
+## Variables that must not be set
+
+| Variable | Why |
+|----------|-----|
+| `CLAUDE_CODE_OAUTH_TOKEN` | A `claude setup-token` token overrides the subscription login for every session. It covers model calls only: Remote Control never starts and the claude.ai MCP connectors disappear. `/health` reports `claude_auth: degraded, method: oauth_token`. |
+| `ANTHROPIC_API_KEY` | Same effect, billed to the API account instead of the subscription. |
+
+ccfleet passes its environment to every session it starts, so anything in its `.env` reaches claude. See [Claude login](../README.md#claude-login).
 
 ## Optional Basic Authentication
 

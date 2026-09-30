@@ -34,7 +34,7 @@ git clone <repo-url>
 cd ccfleet
 npm ci --omit=dev
 cp .env.example .env   # fill in GIT_ROOT at minimum
-npm test               # 106/106 should pass
+npm test               # 99/99 should pass
 npm start
 ```
 
@@ -117,7 +117,7 @@ graph LR
 | Command | What it does |
 |---------|--------------|
 | `npm ci --omit=dev` | Install production dependencies (use `npm ci` for dev/test) |
-| `npm test` | Run the unit test suite (106 tests) |
+| `npm test` | Run the unit test suite (99 tests) |
 | `npm run lint` | Run ESLint across all source files |
 | `npm start` | Start the Express server |
 | `docker compose up -d` | Run in Docker — **Linux hosts only** (see `Dockerfile`, `docker-compose.yml`) |
@@ -156,25 +156,25 @@ See [`docs/ENV_VARS.md`](docs/ENV_VARS.md) for the full reference.
 | `CLAUDE_MODEL` | no | Model passed to `--model` (default `claude-sonnet-4-6`) |
 | `CLAUDE_EFFORT` | no | Effort level: `low`, `medium`, `high`, or `highest` (default `medium`) |
 | `CLAUDE_SKIP_PERMISSIONS` | no | Set to `true` to pass `--dangerously-skip-permissions` — **disables all file permission checks**. Default `false`. See warning below. |
-| `CLAUDE_CODE_OAUTH_TOKEN` | no | Long-lived login from `claude setup-token`, so sessions can authenticate at boot. See [Claude login at boot](#claude-login-at-boot). |
 | `REMOTE_CONTROL_PREFIX` | no | Prefix for `--remote-control` identifiers (default: machine hostname via `os.hostname()`) |
 | `TTYD_URL` | no | URL of optional `ttyd` terminal |
 | `REMOTE_CONTROL_URL` | no | Override for the Open button (default `https://claude.ai/code`) |
 | `LOG_LEVEL` | no | `pino` log level (default `info`) |
 
-## Claude login at boot
+## Claude login
 
-On macOS the `claude` CLI keeps its login in your login Keychain, which stays locked until you log in to the desktop. A session started by the boot-time service can come up with no credentials. To avoid that, give ccfleet a long-lived token:
+Sessions need a claude.ai subscription login. It is the only login type that supports Remote Control and your claude.ai MCP connectors. Log in once as the user ccfleet runs as:
 
 ```bash
-claude setup-token                 # prints a token; note its expiry
-# add CLAUDE_CODE_OAUTH_TOKEN=<token> to ccfleet's .env
-chmod 600 .env
-sudo launchctl kickstart -k system/com.ccfleet   # or: sudo systemctl restart ccfleet
-curl -s http://localhost:3001/health            # claude_auth.method should be "oauth_token"
+claude            # then /login, and choose your Claude subscription
+curl -s http://localhost:3001/health   # claude_auth should be {"status":"ok","method":"claude.ai"}
 ```
 
-The token never appears on a command line; ccfleet passes it to each tmux session through `update-environment`. Sessions that were already running keep their old credentials until you stop and start them. `/health` reports `degraded` when claude has no usable login, but it can't tell whether a token has expired. Set a reminder for the expiry date that `setup-token` prints.
+On an SSH-only machine the CLI stores this login in `~/.claude/.credentials.json` (mode `600`). The boot-time service can read that file before anyone logs in at the desktop, so sessions authenticate at boot. If your login ended up in the macOS Keychain instead (`security find-generic-password -s "Claude Code-credentials"` finds it), the service may not be able to read it after a reboot. `/health` will show `claude_auth: fail` if so.
+
+**Do not set `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` in ccfleet's `.env`.** A token from `claude setup-token` or an API key overrides the subscription login and only covers model calls. Sessions still start, but Remote Control never comes up and the claude.ai MCP connectors disappear. `/health` reports this as `claude_auth: degraded` with the method it found.
+
+`/health` checks that a login is present and readable. It can't tell whether a login has expired; if sessions stop authenticating, repeat the `/login` step above.
 
 ## ⚠ Warning: CLAUDE_SKIP_PERMISSIONS
 

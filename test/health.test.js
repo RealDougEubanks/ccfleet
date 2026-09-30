@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { overallStatus, parseAuthStatus } = require('../lib/health');
+const { authCheckStatus, overallStatus, parseAuthStatus } = require('../lib/health');
 
 function checks(overrides) {
   return {
@@ -28,6 +28,25 @@ test('overallStatus is degraded when only claude is missing', () => {
 
 test('overallStatus is degraded when claude is not logged in', () => {
   assert.equal(overallStatus(checks({ claude_auth: { status: 'fail' } })), 'degraded');
+});
+
+test('overallStatus is degraded when claude uses a login without Remote Control', () => {
+  assert.equal(overallStatus(checks({ claude_auth: { status: 'degraded' } })), 'degraded');
+});
+
+test('authCheckStatus is ok for a claude.ai subscription login', () => {
+  assert.equal(authCheckStatus({ loggedIn: true, method: 'claude.ai' }), 'ok');
+});
+
+test('authCheckStatus is degraded for a setup-token or API key login', () => {
+  assert.equal(authCheckStatus({ loggedIn: true, method: 'oauth_token' }), 'degraded');
+  assert.equal(authCheckStatus({ loggedIn: true, method: 'api_key' }), 'degraded');
+  assert.equal(authCheckStatus({ loggedIn: true, method: null }), 'degraded');
+});
+
+test('authCheckStatus fails when claude is not logged in', () => {
+  assert.equal(authCheckStatus({ loggedIn: false, method: 'claude.ai' }), 'fail');
+  assert.equal(authCheckStatus({ loggedIn: false, method: null }), 'fail');
 });
 
 test('overallStatus is ok when all dependencies are ok', () => {
