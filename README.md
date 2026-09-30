@@ -34,7 +34,7 @@ git clone <repo-url>
 cd ccfleet
 npm ci --omit=dev
 cp .env.example .env   # fill in GIT_ROOT at minimum
-npm test               # 86/86 should pass
+npm test               # 99/99 should pass
 npm start
 ```
 
@@ -117,7 +117,7 @@ graph LR
 | Command | What it does |
 |---------|--------------|
 | `npm ci --omit=dev` | Install production dependencies (use `npm ci` for dev/test) |
-| `npm test` | Run the unit test suite (86 tests) |
+| `npm test` | Run the unit test suite (99 tests) |
 | `npm run lint` | Run ESLint across all source files |
 | `npm start` | Start the Express server |
 | `docker compose up -d` | Run in Docker — **Linux hosts only** (see `Dockerfile`, `docker-compose.yml`) |
@@ -160,6 +160,21 @@ See [`docs/ENV_VARS.md`](docs/ENV_VARS.md) for the full reference.
 | `TTYD_URL` | no | URL of optional `ttyd` terminal |
 | `REMOTE_CONTROL_URL` | no | Override for the Open button (default `https://claude.ai/code`) |
 | `LOG_LEVEL` | no | `pino` log level (default `info`) |
+
+## Claude login
+
+Sessions need a claude.ai subscription login. It is the only login type that supports Remote Control and your claude.ai MCP connectors. Log in once as the user ccfleet runs as:
+
+```bash
+claude            # then /login, and choose your Claude subscription
+curl -s http://localhost:3001/health   # claude_auth should be {"status":"ok","method":"claude.ai"}
+```
+
+On an SSH-only machine the CLI stores this login in `~/.claude/.credentials.json` (mode `600`). The boot-time service can read that file before anyone logs in at the desktop, so sessions authenticate at boot. If your login ended up in the macOS Keychain instead (`security find-generic-password -s "Claude Code-credentials"` finds it), the service may not be able to read it after a reboot. `/health` will show `claude_auth: fail` if so.
+
+**Do not set `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` in ccfleet's `.env`.** A token from `claude setup-token` or an API key overrides the subscription login and only covers model calls. Sessions still start, but Remote Control never comes up and the claude.ai MCP connectors disappear. `/health` reports this as `claude_auth: degraded` with the method it found.
+
+`/health` checks that a login is present and readable. It can't tell whether a login has expired; if sessions stop authenticating, repeat the `/login` step above.
 
 ## ⚠ Warning: CLAUDE_SKIP_PERMISSIONS
 

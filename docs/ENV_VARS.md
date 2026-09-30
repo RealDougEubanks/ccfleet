@@ -29,6 +29,15 @@ cp .env.example .env
 | `BASIC_AUTH_USER` | no | — | Username for optional HTTP Basic authentication. Both this and `BASIC_AUTH_PASS` must be set to enable basic auth | `lib/auth.js` |
 | `BASIC_AUTH_PASS` | no | — | Password for optional HTTP Basic authentication | `lib/auth.js` |
 
+## Variables that must not be set
+
+| Variable | Why |
+|----------|-----|
+| `CLAUDE_CODE_OAUTH_TOKEN` | A `claude setup-token` token overrides the subscription login for every session. It covers model calls only: Remote Control never starts and the claude.ai MCP connectors disappear. `/health` reports `claude_auth: degraded, method: oauth_token`. |
+| `ANTHROPIC_API_KEY` | Same effect, billed to the API account instead of the subscription. |
+
+ccfleet passes its environment to every session it starts, so anything in its `.env` reaches claude. See [Claude login](../README.md#claude-login).
+
 ## Optional Basic Authentication
 
 Basic auth is disabled by default. Access control is handled at the network layer by Cloudflare Access (for remote connections) and LAN trust (for local connections).
