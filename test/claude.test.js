@@ -10,13 +10,69 @@ const {
   buildRemoteControlName,
   encodeProjectPath,
   ensureProjectTrusted,
+  getOauthToken,
   hasExistingSession,
 } = require('../lib/claude');
 
 // Pin REMOTE_CONTROL_PREFIX to a known value (read at module load) and clear
 // other Claude env vars so tests are not affected by the developer's .env.
 process.env.REMOTE_CONTROL_PREFIX = 'TestHost';
-['CLAUDE_SKIP_PERMISSIONS', 'CLAUDE_MODEL', 'CLAUDE_EFFORT'].forEach((k) => delete process.env[k]);
+['CLAUDE_SKIP_PERMISSIONS', 'CLAUDE_MODEL', 'CLAUDE_EFFORT', 'CLAUDE_CODE_OAUTH_TOKEN'].forEach((k) => delete process.env[k]);
+
+function withToken(t, value) {
+  if (value === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  else process.env.CLAUDE_CODE_OAUTH_TOKEN = value;
+  t.after(() => delete process.env.CLAUDE_CODE_OAUTH_TOKEN);
+}
+
+test('getOauthToken returns null when the token is unset or empty', (t) => {
+  withToken(t, undefined);
+  assert.equal(getOauthToken(), null);
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = '';
+  assert.equal(getOauthToken(), null);
+});
+
+test('getOauthToken returns a well-formed token', (t) => {
+  const token = 'sk-ant-oat01-' + 'a'.repeat(80);
+  withToken(t, token);
+  assert.equal(getOauthToken(), token);
+});
+
+test('getOauthToken accepts tokens at the length bounds', (t) => {
+  withToken(t, 'a'.repeat(20));
+  assert.equal(getOauthToken(), 'a'.repeat(20));
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = 'a'.repeat(512);
+  assert.equal(getOauthToken(), 'a'.repeat(512));
+});
+
+test('getOauthToken rejects tokens outside the length bounds', (t) => {
+  withToken(t, 'a'.repeat(19));
+  assert.throws(() => getOauthToken(), { code: 'INVALID_OAUTH_TOKEN' });
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = 'a'.repeat(513);
+  assert.throws(() => getOauthToken(), { code: 'INVALID_OAUTH_TOKEN' });
+});
+
+test('getOauthToken rejects shell metacharacters, whitespace, and quotes', (t) => {
+  withToken(t, undefined);
+  const base = 'sk-ant-oat01-' + 'a'.repeat(30);
+  for (const bad of [';', ' ', '\n', '$(', '`', '"', "'", '|', '&', '=']) {
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = base + bad + 'tail';
+    assert.throws(() => getOauthToken(), { code: 'INVALID_OAUTH_TOKEN' }, `accepted ${JSON.stringify(bad)}`);
+  }
+});
+
+test('getOauthToken error message never contains the token value', (t) => {
+  const secret = 'sk-ant-oat01-SECRETVALUE-' + 'b'.repeat(20) + ' ';
+  withToken(t, secret);
+  assert.throws(() => getOauthToken(), (err) => !err.message.includes('SECRETVALUE'));
+});
+
+test('buildClaudeCommand never includes the OAuth token', (t) => {
+  const token = 'sk-ant-oat01-' + 'c'.repeat(60);
+  withToken(t, token);
+  const argv = buildClaudeCommand({ remoteControlName: 'TestHost-proj', continueExisting: false });
+  assert.ok(argv.every((a) => !a.includes(token)));
+});
 
 async function fakeHome(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccfleet-home-'));

@@ -136,3 +136,11 @@ Non-obvious decisions made during ccfleet implementation. Each entry: assumption
 - **How to apply:** Do not reintroduce `innerHTML` assignment in `public/app.js`. Use `elem(tag, className, text)` for new nodes and `replaceChildren()` to clear containers.
 - **Recorded by:** Claude (Sonnet 4.6)
 - **Date:** 2026-08-11
+
+---
+
+- **Assumption:** `CLAUDE_CODE_OAUTH_TOKEN` reaches claude sessions through tmux's `update-environment` option, not through `new-session -e`, `set-environment`, or the launch command string.
+- **Why:** Every argv on macOS is readable by any local user via `ps`, so passing the token as a command-line argument would expose it, however briefly. With the variable named in `update-environment`, tmux copies it from the calling client's environment (ccfleet's) into the new session's environment without adding it to the tmux server's global environment. One exception: if no tmux server is running, ccfleet's `new-session` starts one, and that server inherits ccfleet's whole environment, token included, like every other `.env` value. On the standard install ttyd starts the server at boot, so this rarely applies. The cost: a rotated token only reaches sessions created after the change. `respawn-pane` reuses the session's environment, so "Save & reload" keeps the old token, and a session has to be stopped and started to pick up the new one. The token is validated against `[A-Za-z0-9_-]{20,512}` so a pasted value with whitespace or shell characters fails loudly at startup, and validation errors never include the value.
+- **How to apply:** Do not move the token onto any tmux or claude command line. If per-session rotation on reload becomes necessary, find a mechanism that keeps the value off argv. `/health` exposes only `loggedIn` and `authMethod` from `claude auth status`; keep the email and org fields out of it.
+- **Recorded by:** Claude (Opus 5.5)
+- **Date:** 2026-09-29

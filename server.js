@@ -22,6 +22,7 @@ const { listProjects, projectExists } = require('./lib/projects');
 const tmux = require('./lib/tmux');
 const health = require('./lib/health');
 const { isValidSessionName, isValidProjectName, toSessionName } = require('./lib/sanitize');
+const { getOauthToken } = require('./lib/claude');
 
 const PORT = Number(process.env.PORT || 3001);
 const REMOTE_NAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -41,6 +42,16 @@ if (configuredPrefix !== undefined && !REMOTE_NAME_RE.test(configuredPrefix)) {
   process.exit(1);
 }
 
+try {
+  const token = getOauthToken();
+  logger.info({ event: 'claude_auth_source', source: token ? 'oauth_token' : 'claude_default' }, token
+    ? 'CLAUDE_CODE_OAUTH_TOKEN set — sessions will authenticate with it'
+    : 'CLAUDE_CODE_OAUTH_TOKEN not set — sessions use the claude CLI login (Keychain on macOS)');
+} catch (err) {
+  logger.error({ event: 'config_error', field: 'CLAUDE_CODE_OAUTH_TOKEN' }, err.message);
+  process.exit(1);
+}
+
 // ---- global crash handlers ----
 
 process.on('unhandledRejection', (reason) => {
@@ -55,11 +66,16 @@ process.on('uncaughtException', (err) => {
 
 // ---- mutable config — updated by POST /api/system/reload ----
 
-const RELOADABLE_KEYS = ['GIT_ROOT', 'TTYD_URL', 'REMOTE_CONTROL_URL', 'LOG_LEVEL'];
+const RELOADABLE_KEYS = ['GIT_ROOT', 'TTYD_URL', 'REMOTE_CONTROL_URL', 'LOG_LEVEL', 'CLAUDE_CODE_OAUTH_TOKEN'];
 
 function reloadConfig() {
   require('dotenv').config({ override: true });
   logger.level = process.env.LOG_LEVEL || 'info';
+  try {
+    getOauthToken();
+  } catch (err) {
+    logger.error({ event: 'config_error', field: 'CLAUDE_CODE_OAUTH_TOKEN' }, `${err.message} — new sessions will fail until it is fixed`);
+  }
   const updated = RELOADABLE_KEYS.filter((k) => process.env[k] !== undefined);
   logger.info({ event: 'config_reload', updated }, 'config reloaded');
   return updated;
@@ -249,6 +265,10 @@ app.post('/api/sessions', async (req, res, next) => {
     } catch (err) {
       if (err.code === 'SESSION_EXISTS') {
         return res.status(409).json({ error: 'session already exists' });
+      }
+      if (err.code === 'INVALID_OAUTH_TOKEN') {
+        logger.error({ event: 'config_error', field: 'CLAUDE_CODE_OAUTH_TOKEN' }, err.message);
+        return res.status(500).json({ error: 'server misconfiguration: CLAUDE_CODE_OAUTH_TOKEN is malformed' });
       }
       throw err;
     }

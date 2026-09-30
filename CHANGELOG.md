@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **`CLAUDE_CODE_OAUTH_TOKEN` option** — sessions can authenticate with a long-lived token from `claude setup-token` instead of the CLI's Keychain login, which is locked on macOS until someone logs in to the desktop. That lockout left sessions started by the boot-time service without credentials. ccfleet validates the token at startup and on config reload, never logs it, and passes it to sessions through tmux `update-environment` so it never appears on a command line or in `ps`. (`lib/claude.js`, `lib/tmux.js`, `server.js`)
+- **`claude_auth` check in `/health`** — runs `claude auth status` and reports `ok`/`fail` plus the auth method (`oauth_token` or `claude.ai`). A failed check marks the service `degraded`. The CLI's email and org fields are dropped before the response is built. It detects missing or unreadable credentials, not an expired token. (`lib/health.js`)
+
 ## [0.9.6] — 2026-09-19
 
 ### Fixed
