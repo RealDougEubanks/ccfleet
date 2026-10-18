@@ -136,3 +136,11 @@ Non-obvious decisions made during ccfleet implementation. Each entry: assumption
 - **How to apply:** Do not reintroduce `innerHTML` assignment in `public/app.js`. Use `elem(tag, className, text)` for new nodes and `replaceChildren()` to clear containers.
 - **Recorded by:** Claude (Sonnet 4.6)
 - **Date:** 2026-08-11
+
+---
+
+- **Assumption:** ccfleet sessions authenticate with the `claude` CLI's claude.ai subscription login. Long-lived `claude setup-token` tokens (`CLAUDE_CODE_OAUTH_TOKEN`) and API keys are unsupported, and `/health` reports them as `claude_auth: degraded`.
+- **Why:** Token support was built on 2026-09-29 and dropped before merge after a side-by-side test on the Mac mini. With the token set, claude started a session but the banner read "Claude API" and Remote Control never came up. `claude mcp list` also lost all 17 claude.ai connectors. With the subscription login, the same launch showed `/remote-control is active`. Remote Control is the reason ccfleet exists. The token was meant to fix logins at boot, but that problem does not occur on this install: the CLI keeps its login in `~/.claude/.credentials.json` rather than the Keychain, and seven Remote Control sessions were running under the LaunchDaemon with FileVault on and nobody logged in at the console.
+- **How to apply:** Do not add token or API-key auth for sessions. If boot-time auth fails on a host whose login is in the Keychain, fix it at the host (log in once over SSH so the CLI writes the credentials file), not with a token. `/health` exposes only `loggedIn` and `authMethod` from `claude auth status`; keep the email and org fields out of it.
+- **Recorded by:** Claude (Opus 5.5)
+- **Date:** 2026-09-29

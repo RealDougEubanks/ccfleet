@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **`claude_auth` check in `/health`** — runs `claude auth status` and reports the login method. Status is `ok` for a claude.ai subscription login, `degraded` for a `claude setup-token` token or API key, and `fail` when there is no readable login. Tokens and API keys cover model calls only, so sessions start but never show up in Remote Control and lose the claude.ai MCP connectors. The CLI's email and org fields are dropped before the response is built. The check can't detect an expired login. (`lib/health.js`)
+
+### Documentation
+- **Claude login** — the README explains which login sessions need, where the CLI stores it on an SSH-only machine, and why `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` must stay out of ccfleet's `.env`. `docs/ENV_VARS.md` lists both under "Variables that must not be set", and the runbook gains entries for `claude_auth: fail` and `claude_auth: degraded`.
+
 ## [0.9.6] — 2026-09-19
 
 ### Fixed

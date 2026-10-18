@@ -97,6 +97,8 @@ npm start
 | Process exits at startup with `GIT_ROOT must be set` | `GIT_ROOT` env var unset | Set `GIT_ROOT` to an absolute path in `.env` |
 | `/readyz` returns 503 with `tmux unavailable` | `tmux` not on `PATH` for the launchd process | `brew install tmux` and restart the daemon |
 | `/health` reports `claude: fail` | `claude` CLI missing or not on `PATH` | Install Claude Code and verify with `which claude` |
+| `/health` reports `claude_auth: fail` | The `claude` CLI has no readable login for the service user, either never logged in or logged out | SSH in as that user, run `claude`, then `/login` with your Claude subscription. Confirm `/health` shows `claude_auth: ok` |
+| `/health` reports `claude_auth: degraded`, or sessions start but never appear in Remote Control | `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` is set in ccfleet's `.env` or the service environment. Either one overrides the subscription login and supports model calls only, with no Remote Control and no claude.ai MCP connectors | Remove the variable, restart ccfleet, then stop and start the affected sessions. `method` in the check shows which login claude used |
 | `/health` reports `git_root: fail` | `GIT_ROOT` points at a non-existent or unreadable directory | `ls -la $GIT_ROOT` to confirm, fix the path in `.env` |
 | Every API call returns 401 | Basic auth is enabled and credentials are wrong or `.env` was rotated | Verify `BASIC_AUTH_USER` and `BASIC_AUTH_PASS` in `.env` match what the client sends |
 | `POST /api/sessions` returns 409 | A tmux session with the sanitized name already exists | `tmux kill-session -t <name>` then retry, or use the Kill button in the UI |
